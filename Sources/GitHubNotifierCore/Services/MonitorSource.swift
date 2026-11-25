@@ -35,10 +35,7 @@ public struct AccountEventsMonitorSource: MonitorSource {
         cursor: String?,
         session: GitHubSession
     ) async throws -> (events: [MonitorEvent], fetchedEvents: [MonitorEvent], nextCursor: String?) {
-        guard case let .account(login) = definition.target else {
-            return ([], [], cursor)
-        }
-        guard let restClient = session.restClient else {
+        guard case let .account(login) = definition.target, let restClient = session.restClient else {
             return ([], [], cursor)
         }
 
@@ -73,10 +70,7 @@ public struct RepositoryEventsMonitorSource: MonitorSource {
         cursor: String?,
         session: GitHubSession
     ) async throws -> (events: [MonitorEvent], fetchedEvents: [MonitorEvent], nextCursor: String?) {
-        guard case let .repository(owner, name) = definition.target else {
-            return ([], [], cursor)
-        }
-        guard let restClient = session.restClient else {
+        guard case let .repository(owner, name) = definition.target, let restClient = session.restClient else {
             return ([], [], cursor)
         }
 
@@ -110,10 +104,7 @@ public struct SavedSearchMonitorSource: MonitorSource {
         cursor: String?,
         session: GitHubSession
     ) async throws -> (events: [MonitorEvent], fetchedEvents: [MonitorEvent], nextCursor: String?) {
-        guard case let .search(query, _) = definition.target else {
-            return ([], [], cursor)
-        }
-        guard let graphqlClient = session.graphqlClient else {
+        guard case let .search(query, _) = definition.target, let graphqlClient = session.graphqlClient else {
             return ([], [], cursor)
         }
 
@@ -156,10 +147,7 @@ public struct CodeKeywordMonitorSource: MonitorSource {
         cursor: String?,
         session: GitHubSession
     ) async throws -> (events: [MonitorEvent], fetchedEvents: [MonitorEvent], nextCursor: String?) {
-        guard case let .code(query, _) = definition.target else {
-            return ([], [], cursor)
-        }
-        guard let restClient = session.restClient else {
+        guard case let .code(query, _) = definition.target, let restClient = session.restClient else {
             return ([], [], cursor)
         }
 
@@ -209,10 +197,7 @@ private func monitorEvent(from event: GitHubEvent, definition: MonitorDefinition
 
 func rawEventsSinceCursor(_ rawEvents: [GitHubEvent], cursor: String?) -> (events: [GitHubEvent], nextCursor: String?) {
     let nextCursor = rawEvents.first?.id ?? cursor
-    guard let cursor else {
-        return (rawEvents, nextCursor)
-    }
-    guard let cursorIndex = rawEvents.firstIndex(where: { $0.id == cursor }) else {
+    guard let cursor, let cursorIndex = rawEvents.firstIndex(where: { $0.id == cursor }) else {
         return (rawEvents, nextCursor)
     }
     return (Array(rawEvents.prefix(upTo: cursorIndex)), nextCursor)

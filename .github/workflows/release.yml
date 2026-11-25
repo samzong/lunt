@@ -77,6 +77,8 @@ jobs:
           echo "===> Verifying arm64 DMG..."
           hdiutil verify .build/Branchlight-${{ env.SEMVER }}-arm64.dmg
 
+          hdiutil verify .build/Branchlight-${{ env.SEMVER }}-universal.dmg
+
       - name: Sign DMGs with Sparkle
         env:
           SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
@@ -92,6 +94,9 @@ jobs:
           echo "===> Signing arm64 DMG..."
           ARM_SIG=$("${SIGN_UPDATE}" .build/Branchlight-${{ env.SEMVER }}-arm64.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
           echo "ARM_SIG=${ARM_SIG}" >> "$GITHUB_ENV"
+
+          UNIVERSAL_SIG=$("${SIGN_UPDATE}" .build/Branchlight-${{ env.SEMVER }}-universal.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
+          echo "UNIVERSAL_SIG=${UNIVERSAL_SIG}" >> "$GITHUB_ENV"
 
       - name: Generate Appcast
         run: |
@@ -113,24 +118,10 @@ jobs:
                 <sparkle:shortVersionString>${{ env.SEMVER }}</sparkle:shortVersionString>
                 <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
                 <enclosure
-                  url="https://github.com/samzong/branchlight/releases/download/${{ env.VERSION }}/Branchlight-${{ env.SEMVER }}-x86_64.dmg"
+                  url="https://github.com/samzong/branchlight/releases/download/${{ env.VERSION }}/Branchlight-${{ env.SEMVER }}-universal.dmg"
                   type="application/octet-stream"
                   sparkle:os="macos"
-                  ${X86_SIG}
-                />
-              </item>
-              
-              <item>
-                <title>Version ${{ env.SEMVER }}</title>
-                <pubDate>${PUB_DATE}</pubDate>
-                <sparkle:version>${{ env.BUILD_NUMBER }}</sparkle:version>
-                <sparkle:shortVersionString>${{ env.SEMVER }}</sparkle:shortVersionString>
-                <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-                <enclosure
-                  url="https://github.com/samzong/branchlight/releases/download/${{ env.VERSION }}/Branchlight-${{ env.SEMVER }}-arm64.dmg"
-                  type="application/octet-stream"
-                  sparkle:os="macos"
-                  ${ARM_SIG}
+                  ${UNIVERSAL_SIG}
                 />
               </item>
             </channel>
@@ -165,6 +156,7 @@ jobs:
           files: |
             .build/Branchlight-${{ env.SEMVER }}-x86_64.dmg
             .build/Branchlight-${{ env.SEMVER }}-arm64.dmg
+            .build/Branchlight-${{ env.SEMVER }}-universal.dmg
             .build/appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

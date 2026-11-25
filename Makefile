@@ -107,7 +107,7 @@ define package_dmg
 	@echo "$(BLUE)===> Creating DMG for $(1)...$(NC)"
 	@rm -rf $(BUILD_DIR)/tmp-$(1)
 	@mkdir -p $(BUILD_DIR)/tmp-$(1)
-	@cp -a "$(shell swift build -c release --triple $(1)-apple-macosx --show-bin-path)/$(APP_NAME).app" "$(BUILD_DIR)/tmp-$(1)/"
+	@cp -a "$(if $(3),$(3),$(shell swift build -c release --triple $(1)-apple-macosx --show-bin-path)/$(APP_NAME).app)" "$(BUILD_DIR)/tmp-$(1)/"
 	@ln -s /Applications "$(BUILD_DIR)/tmp-$(1)/Applications"
 	hdiutil create -volname "$(DMG_VOLUME_NAME) ($(2))" \
 		-srcfolder "$(BUILD_DIR)/tmp-$(1)" \
@@ -121,12 +121,20 @@ endef
 dmg: ## Build DMGs for both architectures
 	$(call build_arch_release,x86_64)
 	$(call package_dmg,x86_64,$(DMG_LABEL_x86_64))
+	@rm -rf "$(BUILD_DIR)/universal"
+	@mkdir -p "$(BUILD_DIR)/universal"
+	@cp -a "$(shell swift build -c release --triple x86_64-apple-macosx --show-bin-path)/$(APP_NAME).app" "$(BUILD_DIR)/universal/"
 	$(call build_arch_release,arm64)
 	$(call package_dmg,arm64,$(DMG_LABEL_arm64))
+	lipo -create "$(BUILD_DIR)/universal/$(APP_NAME).app/Contents/MacOS/$(EXECUTABLE_NAME)" "$(shell swift build -c release --triple arm64-apple-macosx --show-bin-path)/$(APP_NAME).app/Contents/MacOS/$(EXECUTABLE_NAME)" -output "$(BUILD_DIR)/universal/$(EXECUTABLE_NAME)"
+	@mv "$(BUILD_DIR)/universal/$(EXECUTABLE_NAME)" "$(BUILD_DIR)/universal/$(APP_NAME).app/Contents/MacOS/$(EXECUTABLE_NAME)"
+	codesign --force --deep --sign - "$(BUILD_DIR)/universal/$(APP_NAME).app"
+	$(call package_dmg,universal,Universal,$(BUILD_DIR)/universal/$(APP_NAME).app)
 	@echo ""
 	@echo "$(BLUE)===> All DMG files created:$(NC)"
 	@echo "    - x86_64 (Intel): $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-x86_64.dmg"
 	@echo "    - arm64 (Apple Silicon): $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-arm64.dmg"
+	@echo "    - universal: $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-universal.dmg"
 	@echo ""
 	@echo "Note: These DMGs are self-signed; users may need to approve them."
 
