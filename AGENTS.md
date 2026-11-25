@@ -32,8 +32,8 @@ follow the code/config first and update docs separately when asked.
   - `Sources/GitHubNotifierCore/**` for reusable logic and GitHub API behavior.
   - `Sources/GitHubNotifier/**` for app composition, windows, settings, menu bar UI, and resources.
   - `Tests/GitHubNotifierTests/**` for tests.
-  - `Scripts/**` and `Makefile` for local build, packaging, release, and Homebrew update automation.
-  - `.github/workflows/**` for release, Homebrew, and docs automation.
+  - `Scripts/**` and `Makefile` for local build, packaging, and release automation.
+  - `.github/workflows/**` for release, CI, and docs automation.
 
 ## Codex Plugin Routing
 
@@ -72,7 +72,6 @@ Prefer the project Make targets over ad hoc commands:
 - `make dmg`: build release DMGs for `x86_64` and `arm64`.
 - `make install`: build release and install to `~/Applications/Branchlight.app`.
 - `make clean`: clean SwiftPM and `.build`.
-- `make update-homebrew`: update the Homebrew tap automation; requires `GH_PAT`.
 
 Before using any less common CLI flag, verify it with `--help` or official documentation.
 
@@ -110,6 +109,6 @@ Before using any less common CLI flag, verify it with `--help` or official docum
 - Before committing, inspect the staged diff, keep commits focused, and use signed-off commits.
 - Release workflow is tag-driven (`v*`) and builds/signs x86_64 and arm64 DMGs in GitHub Actions.
 - Sparkle release behavior depends on `SUPublicEDKey`, `SPARKLE_ED_KEY`, generated appcast output, and the release workflow.
-- Homebrew update automation depends on `GH_PAT`, the release DMGs, and `make update-homebrew`.
+- Homebrew updates belong to the centralized `samzong/homebrew-tap` package scan.
 - The `idoc` workflow publishes docs from `main`; keep README-facing product names aligned with Branchlight.
 - Avoid changing release/signing/appcast behavior without verifying the corresponding workflow or script path.
