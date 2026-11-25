@@ -10,7 +10,7 @@ CONFIG="${1:-release}"
 ARCH="${2:-$(uname -m)}"
 APP_NAME="${APP_NAME:-Branchlight}"
 EXECUTABLE_NAME="${EXECUTABLE_NAME:-GitHubNotifier}"
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/GitHubNotifier/Info.plist)}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 
 # Determine build directory based on whether cross-compiling

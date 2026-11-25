@@ -4,7 +4,6 @@
 # ------------------------------------------------------------------------------
 APP_NAME := Branchlight
 EXECUTABLE_NAME := GitHubNotifier
-REPO_NAME := branchlight
 BUILD_DIR := .build
 PROJECT_DIR := $(shell pwd)
 HOST_ARCH := $(shell uname -m)
@@ -17,20 +16,8 @@ RELEASE_APP := $(BUILD_DIR)/$(HOST_ARCH)-apple-macosx/release/$(APP_NAME).app
 # Version information
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-ifndef VERSION
-VERSION := $(shell git describe --tags --always 2>/dev/null || echo "0.1.0")
-endif
-
-ifndef MARKETING_SEMVER
-MARKETING_SEMVER := $(shell \
-    VERSION_STR="$(VERSION)"; \
-    CLEAN=$$(echo $$VERSION_STR | sed -E 's/^v//; s/-.*//'); \
-    if echo $$CLEAN | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$$'; then \
-        echo $$CLEAN; \
-    else \
-        echo 0.1.0; \
-    fi)
-endif
+VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/GitHubNotifier/Info.plist)
+MARKETING_SEMVER := $(VERSION)
 
 ifndef BUILD_NUMBER
 BUILD_NUMBER := $(shell git rev-list --count HEAD 2>/dev/null || echo "1")
@@ -41,11 +28,6 @@ ARCHES := x86_64 arm64
 DMG_VOLUME_NAME := "$(APP_NAME)"
 DMG_LABEL_x86_64 := Intel
 DMG_LABEL_arm64 := Apple Silicon
-
-# Homebrew related variables
-HOMEBREW_TAP_REPO := homebrew-tap
-CASK_FILE := Casks/branchlight.rb
-BRANCH_NAME := update-branchlight-$(MARKETING_SEMVER)
 
 # Terminal colors
 RED := \033[0;31m
@@ -132,9 +114,9 @@ define package_dmg
 	hdiutil create -volname "$(DMG_VOLUME_NAME) ($(2))" \
 		-srcfolder "$(BUILD_DIR)/tmp-$(1)" \
 		-ov -format UDZO \
-		"$(BUILD_DIR)/$(APP_NAME)-$(1).dmg"
+		"$(BUILD_DIR)/$(APP_NAME)-$(VERSION)-$(1).dmg"
 	@rm -rf $(BUILD_DIR)/tmp-$(1)
-	@echo "$(GREEN)✅ Created $(BUILD_DIR)/$(APP_NAME)-$(1).dmg$(NC)"
+	@echo "$(GREEN)✅ Created $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-$(1).dmg$(NC)"
 endef
 
 .PHONY: dmg
@@ -145,8 +127,8 @@ dmg: ## Build DMGs for both architectures
 	$(call package_dmg,arm64,$(DMG_LABEL_arm64))
 	@echo ""
 	@echo "$(BLUE)===> All DMG files created:$(NC)"
-	@echo "    - x86_64 (Intel): $(BUILD_DIR)/$(APP_NAME)-x86_64.dmg"
-	@echo "    - arm64 (Apple Silicon): $(BUILD_DIR)/$(APP_NAME)-arm64.dmg"
+	@echo "    - x86_64 (Intel): $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-x86_64.dmg"
+	@echo "    - arm64 (Apple Silicon): $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-arm64.dmg"
 	@echo ""
 	@echo "Note: These DMGs are self-signed; users may need to approve them."
 
@@ -164,17 +146,5 @@ install: ## Build release and install to ~/Applications
 clean: ## Clean build artifacts
 	swift package clean
 	rm -rf $(BUILD_DIR)
-
-.PHONY: update-homebrew
-update-homebrew: ## Update Homebrew Cask (Requires GH_PAT)
-	@GH_PAT=$(GH_PAT) \
-	VERSION=$(VERSION) \
-	MARKETING_SEMVER=$(MARKETING_SEMVER) \
-	APP_NAME=$(APP_NAME) \
-	REPO_NAME=$(REPO_NAME) \
-	HOMEBREW_TAP_REPO=$(HOMEBREW_TAP_REPO) \
-	CASK_FILE=$(CASK_FILE) \
-	BRANCH_NAME=$(BRANCH_NAME) \
-	./Scripts/update_homebrew.sh
 
 .DEFAULT_GOAL := help
