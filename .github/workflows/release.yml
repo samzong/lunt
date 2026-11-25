@@ -32,12 +32,14 @@ jobs:
             echo "::error::Info.plist version $PLIST_VERSION does not match tag version $SEMVER"
             exit 1
           fi
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/GitHubNotifier/Info.plist)"
           IS_PRERELEASE=false
           if [[ "$SEMVER" == *-* ]]; then
             IS_PRERELEASE=true
           fi
           echo "VERSION=$RELEASE_TAG" >> "$GITHUB_ENV"
           echo "SEMVER=$SEMVER" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
       - name: Set up Xcode
@@ -56,7 +58,9 @@ jobs:
           echo "$(pwd)/sparkle-cli/bin" >> "$GITHUB_PATH"
 
       - name: Code Quality Check
-        run: make check
+        run: |
+          make lint
+          make format-check
 
       - name: Build DMG Packages
         run: |
@@ -72,6 +76,8 @@ jobs:
           
           echo "===> Verifying arm64 DMG..."
           hdiutil verify .build/Branchlight-${{ env.SEMVER }}-arm64.dmg
+
+          hdiutil verify .build/Branchlight-${{ env.SEMVER }}-universal.dmg
 
       - name: Sign DMGs with Sparkle
         env:
@@ -89,6 +95,9 @@ jobs:
           ARM_SIG=$("${SIGN_UPDATE}" .build/Branchlight-${{ env.SEMVER }}-arm64.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
           echo "ARM_SIG=${ARM_SIG}" >> "$GITHUB_ENV"
 
+          UNIVERSAL_SIG=$("${SIGN_UPDATE}" .build/Branchlight-${{ env.SEMVER }}-universal.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
+          echo "UNIVERSAL_SIG=${UNIVERSAL_SIG}" >> "$GITHUB_ENV"
+
       - name: Generate Appcast
         run: |
           PUB_DATE=$(date -R)
@@ -105,28 +114,14 @@ jobs:
               <item>
                 <title>Version ${{ env.SEMVER }}</title>
                 <pubDate>${PUB_DATE}</pubDate>
-                <sparkle:version>${{ env.SEMVER }}</sparkle:version>
+                <sparkle:version>${{ env.BUILD_NUMBER }}</sparkle:version>
                 <sparkle:shortVersionString>${{ env.SEMVER }}</sparkle:shortVersionString>
                 <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
                 <enclosure
-                  url="https://github.com/samzong/branchlight/releases/download/${{ env.VERSION }}/Branchlight-${{ env.SEMVER }}-x86_64.dmg"
+                  url="https://github.com/samzong/branchlight/releases/download/${{ env.VERSION }}/Branchlight-${{ env.SEMVER }}-universal.dmg"
                   type="application/octet-stream"
                   sparkle:os="macos"
-                  ${X86_SIG}
-                />
-              </item>
-              
-              <item>
-                <title>Version ${{ env.SEMVER }}</title>
-                <pubDate>${PUB_DATE}</pubDate>
-                <sparkle:version>${{ env.SEMVER }}</sparkle:version>
-                <sparkle:shortVersionString>${{ env.SEMVER }}</sparkle:shortVersionString>
-                <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-                <enclosure
-                  url="https://github.com/samzong/branchlight/releases/download/${{ env.VERSION }}/Branchlight-${{ env.SEMVER }}-arm64.dmg"
-                  type="application/octet-stream"
-                  sparkle:os="macos"
-                  ${ARM_SIG}
+                  ${UNIVERSAL_SIG}
                 />
               </item>
             </channel>
@@ -161,6 +156,7 @@ jobs:
           files: |
             .build/Branchlight-${{ env.SEMVER }}-x86_64.dmg
             .build/Branchlight-${{ env.SEMVER }}-arm64.dmg
+            .build/Branchlight-${{ env.SEMVER }}-universal.dmg
             .build/appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

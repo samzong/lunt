@@ -9,16 +9,14 @@ struct ActivityListView: View {
     let onItemTap: (SearchResultItem) -> Void
 
     var body: some View {
-        Group {
-            if service.isLoading, service.items.isEmpty {
-                loadingView
-            } else if let error = service.errorMessage {
-                errorView(error)
-            } else if displayedItems.isEmpty {
-                emptyView
-            } else {
-                listView
-            }
+        if service.isLoading, service.items.isEmpty {
+            loadingView
+        } else if let error = service.errorMessage {
+            errorView(error)
+        } else if displayedItems.isEmpty {
+            emptyView
+        } else {
+            listView
         }
     }
 

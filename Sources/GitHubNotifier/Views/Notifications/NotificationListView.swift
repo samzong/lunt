@@ -8,16 +8,14 @@ struct NotificationListView: View {
     let onGroupTap: (NotificationGroup) -> Void
 
     var body: some View {
-        Group {
-            if service.isLoading, service.notifications.isEmpty {
-                loadingView
-            } else if let error = service.errorMessage {
-                errorView(error)
-            } else if filteredGroups.isEmpty {
-                emptyView
-            } else {
-                listView
-            }
+        if service.isLoading, service.notifications.isEmpty {
+            loadingView
+        } else if let error = service.errorMessage {
+            errorView(error)
+        } else if filteredGroups.isEmpty {
+            emptyView
+        } else {
+            listView
         }
     }
 

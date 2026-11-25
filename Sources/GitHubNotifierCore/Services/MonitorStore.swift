@@ -19,10 +19,21 @@ public final class MonitorStore {
     private let defaults: UserDefaults
     private let keyPrefix: String
 
-    private var monitorsKey: String { "\(keyPrefix)monitor_definitions" }
-    private var eventsKey: String { "\(keyPrefix)monitor_events" }
-    private var cursorsKey: String { "\(keyPrefix)monitor_cursors" }
-    private var lastSyncedAtKey: String { "\(keyPrefix)monitor_last_synced_at" }
+    private var monitorsKey: String {
+        "\(keyPrefix)monitor_definitions"
+    }
+
+    private var eventsKey: String {
+        "\(keyPrefix)monitor_events"
+    }
+
+    private var cursorsKey: String {
+        "\(keyPrefix)monitor_cursors"
+    }
+
+    private var lastSyncedAtKey: String {
+        "\(keyPrefix)monitor_last_synced_at"
+    }
 
     private func normalizedName(_ name: String?) -> String? {
         guard let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {

@@ -11,7 +11,9 @@ public enum WindowIdentifier: String, CaseIterable, Identifiable, Sendable {
     case searchManagement
     case monitorManagement
 
-    public var id: String { rawValue }
+    public var id: String {
+        rawValue
+    }
 
     public var title: String {
         switch self {

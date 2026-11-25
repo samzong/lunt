@@ -7,9 +7,13 @@ public class NotificationService {
     public var currentUser: GitHubGraphQLClient.ViewerInfo?
     public var isLoading = false
     public var errorMessage: String?
-    public var isAuthenticated: Bool { session.isAuthenticated }
+    public var isAuthenticated: Bool {
+        session.isAuthenticated
+    }
 
-    public var unreadCount: Int { notifications.count }
+    public var unreadCount: Int {
+        notifications.count
+    }
 
     private let session: GitHubSession
     // nonisolated(unsafe) required for mutable properties accessed from deinit

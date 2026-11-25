@@ -18,7 +18,9 @@ public struct RepositorySearchItem: Identifiable, Sendable, Hashable {
     public let isPrivate: Bool
     public let isFork: Bool
 
-    public var fullName: String { "\(owner)/\(name)" }
+    public var fullName: String {
+        "\(owner)/\(name)"
+    }
 
     public var webURL: URL? {
         URL(string: "https://github.com/\(owner)/\(name)")

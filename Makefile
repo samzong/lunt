@@ -11,7 +11,7 @@ HOST_ARCH := $(shell uname -m)
 # Install variables
 USER_APPLICATIONS := $(HOME)/Applications
 INSTALL_PATH := $(USER_APPLICATIONS)/$(APP_NAME).app
-RELEASE_APP := $(BUILD_DIR)/$(HOST_ARCH)-apple-macosx/release/$(APP_NAME).app
+RELEASE_APP = $(shell swift build -c release --show-bin-path)/$(APP_NAME).app
 
 # Version information
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -19,9 +19,7 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/GitHubNotifier/Info.plist)
 MARKETING_SEMVER := $(VERSION)
 
-ifndef BUILD_NUMBER
-BUILD_NUMBER := $(shell git rev-list --count HEAD 2>/dev/null || echo "1")
-endif
+BUILD_NUMBER ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/GitHubNotifier/Info.plist)
 
 # Architecture related variables
 ARCHES := x86_64 arm64
@@ -63,7 +61,7 @@ endef
 .PHONY: build
 build: ## Build for development (debug, current architecture)
 	$(call build_app,debug)
-	@echo "$(BLUE)📍 Application: $(BUILD_DIR)/$(HOST_ARCH)-apple-macosx/debug/$(APP_NAME).app$(NC)"
+	@echo "$(BLUE)📍 Application: $(shell swift build -c debug --show-bin-path)/$(APP_NAME).app$(NC)"
 
 
 .PHONY: run
@@ -109,7 +107,7 @@ define package_dmg
 	@echo "$(BLUE)===> Creating DMG for $(1)...$(NC)"
 	@rm -rf $(BUILD_DIR)/tmp-$(1)
 	@mkdir -p $(BUILD_DIR)/tmp-$(1)
-	@cp -r ".build/$(1)-apple-macosx/release/$(APP_NAME).app" "$(BUILD_DIR)/tmp-$(1)/"
+	@cp -a "$(if $(3),$(3),$(shell swift build -c release --triple $(1)-apple-macosx --show-bin-path)/$(APP_NAME).app)" "$(BUILD_DIR)/tmp-$(1)/"
 	@ln -s /Applications "$(BUILD_DIR)/tmp-$(1)/Applications"
 	hdiutil create -volname "$(DMG_VOLUME_NAME) ($(2))" \
 		-srcfolder "$(BUILD_DIR)/tmp-$(1)" \
@@ -123,12 +121,20 @@ endef
 dmg: ## Build DMGs for both architectures
 	$(call build_arch_release,x86_64)
 	$(call package_dmg,x86_64,$(DMG_LABEL_x86_64))
+	@rm -rf "$(BUILD_DIR)/universal"
+	@mkdir -p "$(BUILD_DIR)/universal"
+	@cp -a "$(shell swift build -c release --triple x86_64-apple-macosx --show-bin-path)/$(APP_NAME).app" "$(BUILD_DIR)/universal/"
 	$(call build_arch_release,arm64)
 	$(call package_dmg,arm64,$(DMG_LABEL_arm64))
+	lipo -create "$(BUILD_DIR)/universal/$(APP_NAME).app/Contents/MacOS/$(EXECUTABLE_NAME)" "$(shell swift build -c release --triple arm64-apple-macosx --show-bin-path)/$(APP_NAME).app/Contents/MacOS/$(EXECUTABLE_NAME)" -output "$(BUILD_DIR)/universal/$(EXECUTABLE_NAME)"
+	@mv "$(BUILD_DIR)/universal/$(EXECUTABLE_NAME)" "$(BUILD_DIR)/universal/$(APP_NAME).app/Contents/MacOS/$(EXECUTABLE_NAME)"
+	codesign --force --deep --sign - "$(BUILD_DIR)/universal/$(APP_NAME).app"
+	$(call package_dmg,universal,Universal,$(BUILD_DIR)/universal/$(APP_NAME).app)
 	@echo ""
 	@echo "$(BLUE)===> All DMG files created:$(NC)"
 	@echo "    - x86_64 (Intel): $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-x86_64.dmg"
 	@echo "    - arm64 (Apple Silicon): $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-arm64.dmg"
+	@echo "    - universal: $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-universal.dmg"
 	@echo ""
 	@echo "Note: These DMGs are self-signed; users may need to approve them."
 
@@ -139,7 +145,7 @@ install: ## Build release and install to ~/Applications
 	$(call build_app,release)
 	@mkdir -p $(USER_APPLICATIONS)
 	@rm -rf $(INSTALL_PATH)
-	@cp -r $(RELEASE_APP) $(INSTALL_PATH)
+	@cp -a "$(RELEASE_APP)" "$(INSTALL_PATH)"
 	@echo "$(GREEN)✅ Installed to $(INSTALL_PATH)$(NC)"
 
 .PHONY: clean

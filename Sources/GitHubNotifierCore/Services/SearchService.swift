@@ -84,11 +84,21 @@ public class SearchService {
 
     public func updateSearch(id: UUID, options: UpdateOptions) {
         guard let index = savedSearches.firstIndex(where: { $0.id == id }) else { return }
-        if let name = options.name { savedSearches[index].name = name }
-        if let query = options.query { savedSearches[index].query = query }
-        if let isEnabled = options.isEnabled { savedSearches[index].isEnabled = isEnabled }
-        if let isPinned = options.isPinned { savedSearches[index].isPinned = isPinned }
-        if let type = options.type { savedSearches[index].type = type }
+        if let name = options.name {
+            savedSearches[index].name = name
+        }
+        if let query = options.query {
+            savedSearches[index].query = query
+        }
+        if let isEnabled = options.isEnabled {
+            savedSearches[index].isEnabled = isEnabled
+        }
+        if let isPinned = options.isPinned {
+            savedSearches[index].isPinned = isPinned
+        }
+        if let type = options.type {
+            savedSearches[index].type = type
+        }
         saveToStorage()
     }
 

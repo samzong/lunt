@@ -19,4 +19,4 @@ echo "===> Packaging app bundle..."
 ./Scripts/package_app.sh "${CONFIG}"
 
 echo "===> Launching ${APP_NAME}..."
-open ".build/${ARCH}-apple-macosx/${CONFIG}/${APP_NAME}.app"
+open "$(swift build -c "$CONFIG" --triple "${ARCH}-apple-macosx" --show-bin-path)/${APP_NAME}.app"

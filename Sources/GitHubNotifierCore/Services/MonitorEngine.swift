@@ -67,8 +67,7 @@ public final class MonitorEngine {
 
     /// Synchronizes a single monitor.
     public func sync(monitor: MonitorDefinition) async {
-        guard session.isAuthenticated else { return }
-        guard let source = makeSource(for: monitor.target) else { return }
+        guard session.isAuthenticated, let source = makeSource(for: monitor.target) else { return }
 
         let cursor = store.cursors[monitor.id]
         let isFirstSync = (cursor == nil)
@@ -89,13 +88,11 @@ public final class MonitorEngine {
             if isFirstSync {
                 // Baseline-first: initialize checkpoint without triggering notifications
                 print("Baseline initialized for \(monitor.displayName)")
-            } else {
-                if !events.isEmpty {
-                    store.addEvents(events)
-                    if let notificationManager {
-                        for event in events {
-                            await notificationManager.sendMonitorNotification(for: event)
-                        }
+            } else if !events.isEmpty {
+                store.addEvents(events)
+                if let notificationManager {
+                    for event in events {
+                        await notificationManager.sendMonitorNotification(for: event)
                     }
                 }
             }

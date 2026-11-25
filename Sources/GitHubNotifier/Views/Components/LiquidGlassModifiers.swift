@@ -32,7 +32,6 @@ extension View {
         }
     }
 
-    @ViewBuilder
     func liquidGlassIconButtonStyle() -> some View {
         self.buttonStyle(.borderless)
     }

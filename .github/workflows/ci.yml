@@ -18,6 +18,7 @@ jobs:
         with:
           xcode-version: latest-stable
       - run: brew install swiftformat swiftlint
-      - run: make check
+      - run: make lint
+      - run: make format-check
       - run: make build
       - run: make test

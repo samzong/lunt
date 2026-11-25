@@ -14,7 +14,6 @@ public enum ActivityFilter: String, CaseIterable, Sendable {
 @Observable
 @MainActor
 public class ActivityService {
-    // Unified items (all combined, deduplicated)
     public var items: [SearchResultItem] {
         let all = (createdItems + assignedItems + mentionedItems + reviewRequestedItems)
         var seenIds = Set<String>()
@@ -26,7 +25,6 @@ public class ActivityService {
         return merged.sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    // Category-separated storage (computed from underlying typed storage)
     public var createdItems: [SearchResultItem] {
         (createdIssues + createdPRs).sorted { $0.updatedAt > $1.updatedAt }
     }
@@ -53,7 +51,6 @@ public class ActivityService {
     private var mentionedIssues: [SearchResultItem] = []
     private var mentionedPRs: [SearchResultItem] = []
 
-    // Review requested is only for PRs
     private var reviewRequestedPRs: [SearchResultItem] = []
 
     public private(set) var isLoading = false
@@ -145,6 +142,11 @@ public class ActivityService {
 
     // MARK: - Legacy Accessors (for backward compatibility)
 
-    public var pullRequests: [SearchResultItem] { pullRequests(for: .all) }
-    public var issues: [SearchResultItem] { issues(for: .all) }
+    public var pullRequests: [SearchResultItem] {
+        pullRequests(for: .all)
+    }
+
+    public var issues: [SearchResultItem] {
+        issues(for: .all)
+    }
 }
