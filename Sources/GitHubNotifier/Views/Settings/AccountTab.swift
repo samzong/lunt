@@ -86,7 +86,7 @@ struct AccountTab: View {
         }
     }
 
-    @ViewBuilder private var webAuthIdleView: some View {
+    private var webAuthIdleView: some View {
         VStack(spacing: 12) {
             Image(systemName: "person.badge.key.fill")
                 .font(.title2)
@@ -106,7 +106,7 @@ struct AccountTab: View {
         .padding(.vertical, 14)
     }
 
-    @ViewBuilder private var webAuthRequestingView: some View {
+    private var webAuthRequestingView: some View {
         VStack(spacing: 12) {
             ProgressView()
                 .scaleEffect(0.8)
@@ -118,7 +118,7 @@ struct AccountTab: View {
         .padding(.vertical, 20)
     }
 
-    @ViewBuilder private func webAuthCodeView(response: DeviceCodeResponse, secondsRemaining: Int) -> some View {
+    private func webAuthCodeView(response: DeviceCodeResponse, secondsRemaining: Int) -> some View {
         VStack(spacing: 16) {
             Text("account.webauth.code_prompt".localized)
                 .font(.subheadline)
@@ -168,7 +168,7 @@ struct AccountTab: View {
         .padding(.vertical, 12)
     }
 
-    @ViewBuilder private func webAuthSuccessView(username: String) -> some View {
+    private func webAuthSuccessView(username: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title3)
@@ -200,7 +200,7 @@ struct AccountTab: View {
         .padding(.vertical, 8)
     }
 
-    @ViewBuilder private func webAuthErrorView(message: String) -> some View {
+    private func webAuthErrorView(message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)

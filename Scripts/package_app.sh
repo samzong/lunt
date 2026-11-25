@@ -11,16 +11,8 @@ ARCH="${2:-$(uname -m)}"
 APP_NAME="${APP_NAME:-Branchlight}"
 EXECUTABLE_NAME="${EXECUTABLE_NAME:-GitHubNotifier}"
 VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/GitHubNotifier/Info.plist)}"
-BUILD_NUMBER="${BUILD_NUMBER:-1}"
-
-# Determine build directory based on whether cross-compiling
-if [ -d ".build/${ARCH}-apple-macosx/${CONFIG}" ]; then
-    # Cross-compilation build path
-    BUILD_DIR=".build/${ARCH}-apple-macosx/${CONFIG}"
-else
-    # Local build path
-    BUILD_DIR=".build/${CONFIG}"
-fi
+BUILD_NUMBER="${BUILD_NUMBER:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/GitHubNotifier/Info.plist)}"
+BUILD_DIR="$(swift build -c "$CONFIG" --triple "${ARCH}-apple-macosx" --show-bin-path)"
 
 BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
 
@@ -74,7 +66,7 @@ for lproj in Sources/GitHubNotifier/Resources/*.lproj; do
 done
 
 # Copy Sparkle framework
-SPARKLE_SRC=".build/${ARCH}-apple-macosx/${CONFIG}/Sparkle.framework"
+SPARKLE_SRC="${BUILD_DIR}/Sparkle.framework"
 if [ -d "${SPARKLE_SRC}" ]; then
     echo "===> Copying Sparkle.framework..."
     mkdir -p "${BUNDLE}/Contents/Frameworks"
@@ -88,7 +80,8 @@ if [ -d "${SPARKLE_SRC}" ]; then
     echo "===> Fixing rpath for Sparkle..."
     install_name_tool -add_rpath "@executable_path/../Frameworks" "${BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}" 2>/dev/null || true
 else
-    echo "⚠️  Warning: Sparkle.framework not found at ${SPARKLE_SRC}"
+    echo "❌ Error: Sparkle.framework not found at ${SPARKLE_SRC}"
+    exit 1
 fi
 
 # Self-sign the app (with frameworks)

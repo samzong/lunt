@@ -30,5 +30,7 @@ struct ListRowButtonStyle: ButtonStyle {
 }
 
 extension ButtonStyle where Self == ListRowButtonStyle {
-    static var listRow: ListRowButtonStyle { ListRowButtonStyle() }
+    static var listRow: ListRowButtonStyle {
+        ListRowButtonStyle()
+    }
 }

@@ -159,7 +159,7 @@ struct SearchWindowView: View {
 
     // MARK: - Sidebar
 
-    @ViewBuilder private var sidebar: some View {
+    private var sidebar: some View {
         List(selection: $selectedSearchId) {
             if filteredSavedSearches.isEmpty {
                 sidebarEmptyView
@@ -240,7 +240,7 @@ struct SearchWindowView: View {
 
     // MARK: - Content Section
 
-    @ViewBuilder private var contentSection: some View {
+    private var contentSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             querySection
 
@@ -260,7 +260,7 @@ struct SearchWindowView: View {
 
     // MARK: - Query Section
 
-    @ViewBuilder private var querySection: some View {
+    private var querySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             if isEditing || isNewSearch {
                 HStack {
@@ -324,7 +324,7 @@ struct SearchWindowView: View {
 
     // MARK: - Preview Section
 
-    @ViewBuilder private var previewSection: some View {
+    private var previewSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("search.management.preview.results".localized)

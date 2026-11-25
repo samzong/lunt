@@ -12,7 +12,9 @@ public enum SearchType: String, Codable, CaseIterable, Sendable, Identifiable {
     case discussion
     case repository
 
-    public var id: String { rawValue }
+    public var id: String {
+        rawValue
+    }
 
     public var icon: String {
         switch self {

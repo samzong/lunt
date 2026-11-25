@@ -39,7 +39,9 @@ struct MonitorWindowView: View {
         case search
         case code
 
-        var id: String { rawValue }
+        var id: String {
+            rawValue
+        }
 
         var displayName: String {
             switch self {
@@ -516,7 +518,6 @@ extension MonitorWindowView {
         }
     }
 
-    @ViewBuilder
     private func editMonitorCard(for monitor: MonitorDefinition) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
@@ -599,7 +600,6 @@ extension MonitorWindowView {
         .liquidGlassSurface()
     }
 
-    @ViewBuilder
     private func headerCard(for monitor: MonitorDefinition) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -724,7 +724,6 @@ extension MonitorWindowView {
         }
     }
 
-    @ViewBuilder
     private func dangerZone(for monitor: MonitorDefinition) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("monitor.management.danger.title".localized)

@@ -24,8 +24,7 @@ public class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
     public func requestAuthorization() async -> Bool {
         do {
-            let granted = try await notificationCenter.requestAuthorization(options: [.alert, .sound, .badge])
-            return granted
+            return try await notificationCenter.requestAuthorization(options: [.alert, .sound, .badge])
         } catch {
             print("Failed to request notification authorization: \(error)")
             return false

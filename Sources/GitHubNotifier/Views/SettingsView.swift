@@ -124,7 +124,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case aiFeatures = "ai"
     case about
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var title: String {
         switch self {

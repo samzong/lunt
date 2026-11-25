@@ -11,7 +11,7 @@ HOST_ARCH := $(shell uname -m)
 # Install variables
 USER_APPLICATIONS := $(HOME)/Applications
 INSTALL_PATH := $(USER_APPLICATIONS)/$(APP_NAME).app
-RELEASE_APP := $(BUILD_DIR)/$(HOST_ARCH)-apple-macosx/release/$(APP_NAME).app
+RELEASE_APP = $(shell swift build -c release --show-bin-path)/$(APP_NAME).app
 
 # Version information
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -19,9 +19,7 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/GitHubNotifier/Info.plist)
 MARKETING_SEMVER := $(VERSION)
 
-ifndef BUILD_NUMBER
-BUILD_NUMBER := $(shell git rev-list --count HEAD 2>/dev/null || echo "1")
-endif
+BUILD_NUMBER ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/GitHubNotifier/Info.plist)
 
 # Architecture related variables
 ARCHES := x86_64 arm64
@@ -63,7 +61,7 @@ endef
 .PHONY: build
 build: ## Build for development (debug, current architecture)
 	$(call build_app,debug)
-	@echo "$(BLUE)📍 Application: $(BUILD_DIR)/$(HOST_ARCH)-apple-macosx/debug/$(APP_NAME).app$(NC)"
+	@echo "$(BLUE)📍 Application: $(shell swift build -c debug --show-bin-path)/$(APP_NAME).app$(NC)"
 
 
 .PHONY: run
@@ -109,7 +107,7 @@ define package_dmg
 	@echo "$(BLUE)===> Creating DMG for $(1)...$(NC)"
 	@rm -rf $(BUILD_DIR)/tmp-$(1)
 	@mkdir -p $(BUILD_DIR)/tmp-$(1)
-	@cp -r ".build/$(1)-apple-macosx/release/$(APP_NAME).app" "$(BUILD_DIR)/tmp-$(1)/"
+	@cp -a "$(shell swift build -c release --triple $(1)-apple-macosx --show-bin-path)/$(APP_NAME).app" "$(BUILD_DIR)/tmp-$(1)/"
 	@ln -s /Applications "$(BUILD_DIR)/tmp-$(1)/Applications"
 	hdiutil create -volname "$(DMG_VOLUME_NAME) ($(2))" \
 		-srcfolder "$(BUILD_DIR)/tmp-$(1)" \
@@ -139,7 +137,7 @@ install: ## Build release and install to ~/Applications
 	$(call build_app,release)
 	@mkdir -p $(USER_APPLICATIONS)
 	@rm -rf $(INSTALL_PATH)
-	@cp -r $(RELEASE_APP) $(INSTALL_PATH)
+	@cp -a "$(RELEASE_APP)" "$(INSTALL_PATH)"
 	@echo "$(GREEN)✅ Installed to $(INSTALL_PATH)$(NC)"
 
 .PHONY: clean

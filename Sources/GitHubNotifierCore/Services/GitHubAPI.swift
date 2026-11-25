@@ -276,10 +276,18 @@ extension GitHubEvent {
     }
 
     public var monitorURL: String {
-        if let url = payload?.comment?.htmlUrl { return url }
-        if let url = payload?.issue?.htmlUrl { return url }
-        if let url = payload?.pullRequest?.htmlUrl { return url }
-        if let url = payload?.release?.htmlUrl { return url }
+        if let url = payload?.comment?.htmlUrl {
+            return url
+        }
+        if let url = payload?.issue?.htmlUrl {
+            return url
+        }
+        if let url = payload?.pullRequest?.htmlUrl {
+            return url
+        }
+        if let url = payload?.release?.htmlUrl {
+            return url
+        }
         if type == "PushEvent" {
             if let sha = payload?.commits?.first?.sha, !sha.isEmpty {
                 return "https://github.com/\(repo.name)/commit/\(sha)"

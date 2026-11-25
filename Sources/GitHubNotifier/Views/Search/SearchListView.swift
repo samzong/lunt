@@ -22,7 +22,7 @@ struct SearchListView: View {
 
     // MARK: - Content
 
-    @ViewBuilder private var content: some View {
+    private var content: some View {
         Group {
             if searchService.savedSearches.isEmpty {
                 emptyStateNoSearches
@@ -72,7 +72,7 @@ struct SearchListView: View {
 
     // MARK: - Combined Results List (All mode)
 
-    @ViewBuilder private var combinedResultsList: some View {
+    private var combinedResultsList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(displayedItems) { item in
@@ -104,7 +104,7 @@ struct SearchListView: View {
 
     // MARK: - Results List (Issue/PR only)
 
-    @ViewBuilder private var resultsList: some View {
+    private var resultsList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(displayedItems) { item in
@@ -135,7 +135,7 @@ struct SearchListView: View {
         }
     }
 
-    @ViewBuilder private var repositoryList: some View {
+    private var repositoryList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(displayedRepositories) { repo in
@@ -156,7 +156,7 @@ struct SearchListView: View {
 
     // MARK: - Empty States
 
-    @ViewBuilder private var emptyStateNoSearches: some View {
+    private var emptyStateNoSearches: some View {
         PolishedEmptyStateView(
             title: "search.management.empty.title".localized,
             message: "search.management.empty.description".localized,
@@ -171,7 +171,7 @@ struct SearchListView: View {
         }
     }
 
-    @ViewBuilder private var emptyStateNoResults: some View {
+    private var emptyStateNoResults: some View {
         PolishedEmptyStateView(
             title: "search.list.no_results.title".localized,
             message: "search.list.no_results.description".localized,
@@ -180,7 +180,7 @@ struct SearchListView: View {
         )
     }
 
-    @ViewBuilder private var loadingView: some View {
+    private var loadingView: some View {
         VStack {
             Spacer()
             ProgressView("Loading searches...")
