@@ -5,8 +5,8 @@
 set -euo pipefail
 
 CONFIG="${1:-debug}"
-APP_NAME="${APP_NAME:-Branchlight}"
-EXECUTABLE_NAME="${EXECUTABLE_NAME:-GitHubNotifier}"
+APP_NAME="${APP_NAME:-Lunt}"
+EXECUTABLE_NAME="${EXECUTABLE_NAME:-Lunt}"
 ARCH=$(uname -m)
 
 echo "===> Stopping any running ${APP_NAME} instances..."

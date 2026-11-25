@@ -1,9 +1,7 @@
-# Branchlight - Makefile
-
 ##@ Project Configuration
 # ------------------------------------------------------------------------------
-APP_NAME := Branchlight
-EXECUTABLE_NAME := GitHubNotifier
+APP_NAME := Lunt
+EXECUTABLE_NAME := Lunt
 BUILD_DIR := .build
 PROJECT_DIR := $(shell pwd)
 HOST_ARCH := $(shell uname -m)
@@ -16,10 +14,10 @@ RELEASE_APP = $(shell swift build -c release --show-bin-path)/$(APP_NAME).app
 # Version information
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/GitHubNotifier/Info.plist)
+VERSION ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/Lunt/Info.plist)
 MARKETING_SEMVER := $(VERSION)
 
-BUILD_NUMBER ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/GitHubNotifier/Info.plist)
+BUILD_NUMBER ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/Lunt/Info.plist)
 
 # Architecture related variables
 ARCHES := x86_64 arm64

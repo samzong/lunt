@@ -1,18 +1,18 @@
-# Branchlight
+# Lunt
     
 <div align="center">
-  <img src="Sources/GitHubNotifier/Resources/Assets.xcassets/AppIcon.appiconset/icon_256.png" alt="Branchlight" width="128" />
+  <img src="Sources/Lunt/Resources/Assets.xcassets/AppIcon.appiconset/icon_256.png" alt="Lunt" width="128" />
   <br />
   <div id="download-section" style="margin: 20px 0;">
-    <a href="https://github.com/samzong/branchlight/releases/latest" style="text-decoration: none;">
+    <a href="https://github.com/samzong/lunt/releases/latest" style="text-decoration: none;">
       <img src="https://img.shields.io/badge/⬇%20Download%20for%20macOS-28a745?style=for-the-badge&labelColor=28a745" alt="Download" />
     </a>
   </div>
   <p>A quiet macOS menubar hub for GitHub work.</p>
   <p>
-    <a href="https://github.com/samzong/branchlight/releases"><img src="https://img.shields.io/github/v/release/samzong/branchlight" alt="Release" /></a>
-    <a href="https://github.com/samzong/branchlight/blob/main/LICENSE"><img src="https://img.shields.io/github/license/samzong/branchlight" alt="License" /></a>
-    <a href="https://deepwiki.com/samzong/branchlight"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+    <a href="https://github.com/samzong/lunt/releases"><img src="https://img.shields.io/github/v/release/samzong/lunt" alt="Release" /></a>
+    <a href="https://github.com/samzong/lunt/blob/main/LICENSE"><img src="https://img.shields.io/github/license/samzong/lunt" alt="License" /></a>
+    <a href="https://deepwiki.com/samzong/lunt"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
   </p>
 </div>
 

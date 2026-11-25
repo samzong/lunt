@@ -27,12 +27,12 @@ jobs:
             exit 1
           fi
           SEMVER="${RELEASE_TAG#v}"
-          PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/GitHubNotifier/Info.plist)"
+          PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/Lunt/Info.plist)"
           if [[ "$PLIST_VERSION" != "$SEMVER" ]]; then
             echo "::error::Info.plist version $PLIST_VERSION does not match tag version $SEMVER"
             exit 1
           fi
-          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/GitHubNotifier/Info.plist)"
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/Lunt/Info.plist)"
           IS_PRERELEASE=false
           if [[ "$SEMVER" == *-* ]]; then
             IS_PRERELEASE=true
@@ -72,12 +72,12 @@ jobs:
           ls -lh .build/*.dmg
           
           echo "===> Verifying x86_64 DMG..."
-          hdiutil verify .build/Branchlight-${{ env.SEMVER }}-x86_64.dmg
+          hdiutil verify .build/Lunt-${{ env.SEMVER }}-x86_64.dmg
           
           echo "===> Verifying arm64 DMG..."
-          hdiutil verify .build/Branchlight-${{ env.SEMVER }}-arm64.dmg
+          hdiutil verify .build/Lunt-${{ env.SEMVER }}-arm64.dmg
 
-          hdiutil verify .build/Branchlight-${{ env.SEMVER }}-universal.dmg
+          hdiutil verify .build/Lunt-${{ env.SEMVER }}-universal.dmg
 
       - name: Sign DMGs with Sparkle
         env:
@@ -88,14 +88,14 @@ jobs:
           xattr -cr "${SIGN_UPDATE}" 2>/dev/null || true
           
           echo "===> Signing x86_64 DMG..."
-          X86_SIG=$("${SIGN_UPDATE}" .build/Branchlight-${{ env.SEMVER }}-x86_64.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
+          X86_SIG=$("${SIGN_UPDATE}" .build/Lunt-${{ env.SEMVER }}-x86_64.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
           echo "X86_SIG=${X86_SIG}" >> "$GITHUB_ENV"
           
           echo "===> Signing arm64 DMG..."
-          ARM_SIG=$("${SIGN_UPDATE}" .build/Branchlight-${{ env.SEMVER }}-arm64.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
+          ARM_SIG=$("${SIGN_UPDATE}" .build/Lunt-${{ env.SEMVER }}-arm64.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
           echo "ARM_SIG=${ARM_SIG}" >> "$GITHUB_ENV"
 
-          UNIVERSAL_SIG=$("${SIGN_UPDATE}" .build/Branchlight-${{ env.SEMVER }}-universal.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
+          UNIVERSAL_SIG=$("${SIGN_UPDATE}" .build/Lunt-${{ env.SEMVER }}-universal.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
           echo "UNIVERSAL_SIG=${UNIVERSAL_SIG}" >> "$GITHUB_ENV"
 
       - name: Generate Appcast
@@ -106,8 +106,8 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
             <channel>
-              <title>Branchlight Updates</title>
-              <link>https://github.com/samzong/branchlight</link>
+              <title>Lunt Updates</title>
+              <link>https://github.com/samzong/lunt</link>
               <description>Most recent changes with links to updates.</description>
               <language>en</language>
               
@@ -118,7 +118,7 @@ jobs:
                 <sparkle:shortVersionString>${{ env.SEMVER }}</sparkle:shortVersionString>
                 <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
                 <enclosure
-                  url="https://github.com/samzong/branchlight/releases/download/${{ env.VERSION }}/Branchlight-${{ env.SEMVER }}-universal.dmg"
+                  url="https://github.com/samzong/lunt/releases/download/${{ env.VERSION }}/Lunt-${{ env.SEMVER }}-universal.dmg"
                   type="application/octet-stream"
                   sparkle:os="macos"
                   ${UNIVERSAL_SIG}
@@ -154,9 +154,9 @@ jobs:
           make_latest: ${{ steps.get_version.outputs.is_prerelease == 'true' && 'false' || 'true' }}
           fail_on_unmatched_files: true
           files: |
-            .build/Branchlight-${{ env.SEMVER }}-x86_64.dmg
-            .build/Branchlight-${{ env.SEMVER }}-arm64.dmg
-            .build/Branchlight-${{ env.SEMVER }}-universal.dmg
+            .build/Lunt-${{ env.SEMVER }}-x86_64.dmg
+            .build/Lunt-${{ env.SEMVER }}-arm64.dmg
+            .build/Lunt-${{ env.SEMVER }}-universal.dmg
             .build/appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

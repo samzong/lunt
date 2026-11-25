@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "GitHubNotifier",
+    name: "Lunt",
     platforms: [
         .macOS(.v15),
     ],
@@ -12,21 +12,21 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "GitHubNotifierCore",
+            name: "LuntCore",
             dependencies: [],
-            path: "Sources/GitHubNotifierCore",
+            path: "Sources/LuntCore",
             swiftSettings: [
                 .enableUpcomingFeature("StrictConcurrency"),
             ]
         ),
         .executableTarget(
-            name: "GitHubNotifier",
+            name: "Lunt",
             dependencies: [
-                "GitHubNotifierCore",
+                "LuntCore",
                 .product(name: "Sparkle", package: "Sparkle"),
                 .product(name: "Kingfisher", package: "Kingfisher"),
             ],
-            path: "Sources/GitHubNotifier",
+            path: "Sources/Lunt",
             exclude: ["Info.plist"],
             resources: [
                 .process("Resources/Assets.xcassets"),
@@ -41,14 +41,14 @@ let package = Package(
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",
                     "-Xlinker", "__info_plist",
-                    "-Xlinker", "Sources/GitHubNotifier/Info.plist",
+                    "-Xlinker", "Sources/Lunt/Info.plist",
                 ]),
             ]
         ),
         .testTarget(
-            name: "GitHubNotifierTests",
-            dependencies: ["GitHubNotifier"],
-            path: "Tests/GitHubNotifierTests"
+            name: "LuntTests",
+            dependencies: ["Lunt"],
+            path: "Tests/LuntTests"
         ),
     ]
 )

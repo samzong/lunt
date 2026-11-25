@@ -1,0 +1,270 @@
+/* Settings View */
+"settings.title" = "设置";
+
+/* Settings Tabs */
+"settings.tab.general" = "通用";
+"settings.tab.account" = "账户";
+"settings.user" = "用户";
+"settings.tab.about" = "关于";
+"settings.tab.rules" = "规则";
+"settings.tab.ai" = "AI";
+"settings.coming_soon.title" = "即将推出";
+"settings.coming_soon.subtitle" = "此功能正在开发中";
+
+/* About Tab */
+"about.github.repo" = "GitHub 仓库";
+"about.report.issue" = "报告问题";
+"about.version" = "版本:";
+"about.check.update" = "检查更新";
+"about.new.version" = "有新版本可用:";
+"about.download" = "下载";
+"about.license" = "许可证:";
+"about.up.to.date" = "已是最新版本！";
+"about.error.invalid.url" = "无效的 URL";
+"about.error.parse" = "解析响应失败";
+"about.error.network" = "网络错误";
+
+/* General Tab */
+"settings.refresh.title" = "刷新频率:";
+"settings.refresh.1min" = "每 1 分钟";
+"settings.refresh.2min" = "每 2 分钟";
+"settings.refresh.5min" = "每 5 分钟";
+"settings.refresh.10min" = "每 10 分钟";
+
+"settings.startup.launch" = "登录时启动";
+
+/* Menu Bar Tab Visibility */
+"settings.menubar.tabs.section" = "菜单栏标签页";
+"settings.menubar.tabs.notifications" = "显示“通知”标签页";
+"settings.menubar.tabs.activity" = "显示“动态”标签页";
+"settings.menubar.tabs.search" = "显示“搜索”标签页";
+"settings.menubar.tabs.watching" = "显示“监控”标签页";
+"settings.menubar.tabs.description" = "选择菜单栏窗口中显示的标签页。修改后需重启应用生效。";
+"settings.menubar.tabs.minimum_one" = "至少保留一个标签页开启。";
+
+/* Notification Settings */
+"settings.notifications.section" = "系统通知";
+"settings.notifications.enable" = "启用系统通知";
+"settings.notifications.test" = "发送测试通知";
+"settings.notifications.description" = "系统通知仅在后台自动刷新时显示。";
+
+/* Account Tab */
+
+/* Menu Bar View */
+"menubar.title" = "通知";
+"menubar.loading" = "正在加载...";
+"menubar.empty.title" = "没有未读通知";
+"menubar.empty.subtitle" = "全部看完了！";
+"menubar.error.title" = "错误";
+"menubar.retry" = "重试";
+"menubar.mark.all.read" = "全部标为已读";
+"menubar.open.in.browser" = "在浏览器中打开";
+"menubar.refresh" = "刷新";
+"menubar.preferences" = "偏好设置...";
+"menubar.quit" = "退出";
+"menubar.open.github.notifications" = "打开 GitHub 通知";
+"menubar.tab.all" = "All";
+"menubar.tab.issues" = "Issues";
+"menubar.tab.prs" = "PRs";
+"menubar.tab.notifications" = "通知";
+"menubar.tab.activity" = "动态";
+"menubar.tab.search" = "搜索";
+"menubar.tab.watching" = "监控";
+"menubar.watching.empty.title" = "尚未添加监控";
+"menubar.watching.empty.description" = "监控用户、代码库、搜索或代码关键字，并接收本地通知。";
+"menubar.no_items" = "暂无相关条目";
+"menubar.filter.all" = "全部";
+"menubar.filter.created" = "创建";
+"menubar.filter.assigned" = "指派";
+"menubar.filter.mentioned" = "提及";
+"menubar.filter.review_requested" = "待审";
+"menubar.empty.issues" = "没有未读 Issues";
+"menubar.empty.prs" = "没有未读 PRs";
+"menubar.mark_all_read" = "全部已读";
+"menubar.mark_issues_read" = "Issues 已读";
+"menubar.mark_prs_read" = "PRs 已读";
+"menubar.view_all_on_github" = "在 GitHub 查看全部";
+
+/* Notification Row */
+"notification.mark.as.read" = "标记为已读";
+"notification.hide.preview" = "隐藏预览";
+"notification.show.preview" = "显示预览";
+
+/* Errors */
+"error.token.not.configured" = "GitHub Token 未配置";
+
+/* Time Ago */
+"time.years.ago" = "%d 年前";
+"time.years.ago.plural" = "%d 年前";
+"time.months.ago" = "%d 个月前";
+"time.months.ago.plural" = "%d 个月前";
+"time.weeks.ago" = "%d 周前";
+"time.weeks.ago.plural" = "%d 周前";
+"time.days.ago" = "%d 天前";
+"time.days.ago.plural" = "%d 天前";
+"time.hours.ago" = "%d 小时前";
+"time.hours.ago.plural" = "%d 小时前";
+"time.minutes.ago" = "%d 分钟前";
+"time.minutes.ago.plural" = "%d 分钟前";
+"time.just.now" = "刚刚";
+
+/* Notification Reasons */
+"notification.reason.assign" = "被分配";
+"notification.reason.author" = "作者";
+"notification.reason.comment" = "评论";
+"notification.reason.ci_activity" = "CI 活动";
+"notification.reason.invitation" = "邀请";
+"notification.reason.manual" = "手动";
+"notification.reason.mention" = "被提及";
+"notification.reason.review_requested" = "请求审查";
+"notification.reason.security_alert" = "安全警报";
+"notification.reason.state_change" = "状态变更";
+"notification.reason.subscribed" = "已订阅";
+"notification.reason.team_mention" = "团队被提及";
+
+/* PR States */
+"pr.state.open" = "开放";
+"pr.state.closed" = "关闭";
+"pr.state.merged" = "已合并";
+"pr.state.draft" = "草稿";
+
+/* Issue States */
+"issue.state.open" = "开放";
+"issue.state.closed_completed" = "已关闭（已完成）";
+"issue.state.closed_not_planned" = "已关闭（未计划）";
+
+/* Summary Notification */
+"notification.summary.title" = "更多 GitHub 通知";
+"notification.summary.body" = "您还有 %d 条未读通知";
+"notification.monitor.title" = "监控：%@";
+
+/* Test Notification */
+"notification.test.title" = "🎉 测试通知";
+"notification.test.subtitle" = "Lunt 工作正常！";
+"notification.test.body" = "点击可打开 GitHub 通知页面";
+
+/* Rules Tab */
+"rules.title" = "通知规则";
+"rules.add" = "添加规则";
+"rules.empty.title" = "暂无规则";
+"rules.empty.subtitle" = "创建规则来自动过滤和管理通知";
+
+/* Search Management */
+"search.management.title" = "已保存搜索";
+"search.management.add" = "新建搜索";
+"search.management.name.placeholder" = "搜索名称";
+"search.management.type" = "类型:";
+"search.management.empty.title" = "暂无已保存搜索";
+"search.management.empty.description" = "创建已保存搜索来聚合 GitHub 结果。";
+"search.management.filter.placeholder" = "筛选已保存搜索";
+"search.management.no_matches" = "没有匹配项";
+"search.management.no_matches.description" = "尝试其他搜索名称、查询或类型。";
+"search.management.no_selection.title" = "未选择搜索";
+"search.management.no_selection.description" = "从侧边栏选择一个搜索，或新建一个搜索。";
+"search.management.preview" = "预览";
+"search.management.preview.results" = "预览结果";
+"search.management.preview.count" = "%d 项";
+"search.management.preview.empty.title" = "暂无预览";
+"search.management.preview.empty.description" = "点击“预览”测试查询。";
+"search.management.delete.title" = "删除搜索";
+"search.management.delete.message" = "确定要删除这个搜索吗？此操作无法撤销。";
+"search.management.pin" = "固定到标签页";
+"search.management.unpin" = "从标签页取消固定";
+"search.management.enable" = "启用";
+"search.management.disable" = "停用";
+"search.list.no_results.title" = "暂无结果";
+"search.list.no_results.description" = "已保存搜索没有返回结果。";
+
+/* Rule Editor */
+"rules.editor.new" = "新建规则";
+"rules.editor.edit" = "编辑规则";
+"rules.editor.name" = "规则名称";
+"rules.editor.enabled" = "启用";
+"rules.editor.conditions" = "条件";
+"rules.editor.add_condition" = "添加条件";
+"rules.editor.logic" = "逻辑";
+"rules.editor.actions" = "动作";
+"rules.editor.value" = "值";
+
+/* Welcome View */
+"welcome.title" = "欢迎使用";
+"welcome.subtitle" = "在菜单栏中随时掌握 GitHub 通知动态";
+"welcome.setup.hint" = "连接你的 GitHub 账号即可开始使用";
+"welcome.open.settings" = "连接";
+
+/* Account Tab - Auth Method */
+"account.auth.header" = "GitHub 账号";
+
+/* Account Tab - Web Auth */
+"account.webauth.description" = "直接使用 GitHub 账户登录，无需令牌";
+"account.webauth.signin" = "使用 GitHub 登录";
+"account.webauth.requesting" = "正在请求授权码...";
+"account.webauth.code_prompt" = "在 GitHub 上输入此代码以完成授权：";
+"account.webauth.open_browser" = "打开 GitHub";
+"account.webauth.copy_code" = "复制代码";
+"account.webauth.waiting" = "等待授权中...";
+"account.webauth.expires_in" = "有效期剩余 %@";
+"account.webauth.signed_in" = "已通过 GitHub OAuth 登录";
+"account.webauth.signout" = "退出登录";
+"account.webauth.manage_apps" = "管理 GitHub 应用授权";
+"account.webauth.retry" = "重试";
+
+/* Common */
+"common.cancel" = "取消";
+"common.delete" = "删除";
+"common.edit" = "编辑";
+"common.save" = "保存";
+
+/* Monitor Management */
+"monitor.management.title" = "监控管理";
+"monitor.management.add" = "添加监控";
+"monitor.management.filter.placeholder" = "筛选监控项...";
+"monitor.management.empty" = "未选择监控";
+"monitor.management.empty.subtitle" = "从侧边栏选择一个监控项，或者添加一个新监控来开始追踪 GitHub 事件。";
+"monitor.management.delete.title" = "删除监控";
+"monitor.management.delete.message" = "删除“%@”？它已收集的事件和同步状态会从这台 Mac 清除。";
+"monitor.management.delete.button" = "删除监控";
+"monitor.management.delete.fallback" = "此监控";
+"monitor.management.type.account" = "账号";
+"monitor.management.type.repo" = "代码库";
+"monitor.management.type.search" = "已存搜索";
+"monitor.management.type.code" = "代码关键字";
+"monitor.management.target.label" = "监控目标:";
+"monitor.management.status.label" = "同步状态:";
+"monitor.management.last_synced.label" = "上次同步:";
+"monitor.management.last_synced.never" = "尚未同步";
+"monitor.management.events.empty" = "暂无事件记录。";
+"monitor.management.danger.title" = "危险操作";
+"monitor.management.danger.description" = "从这台 Mac 删除此监控及其本地事件历史。";
+"monitor.management.edit.title" = "编辑监控";
+"monitor.management.edit.subtitle" = "修改这个 watch 项追踪的目标。";
+"monitor.management.edit.target_change_note" = "修改目标会清除此监控的本地事件和同步状态。";
+"monitor.management.add.title" = "添加新监控";
+"monitor.management.add.subtitle" = "选择 GitHub 目标和 Lunt 要追踪的内容。";
+"monitor.management.add.name.placeholder" = "显示名称";
+"monitor.management.add.input.placeholder" = "URL、@用户名、owner/repo 或查询词";
+"monitor.management.add.type.label" = "监控类型";
+"monitor.management.add.target.label" = "目标";
+"monitor.management.add.account.placeholder" = "@用户名或个人主页 URL";
+"monitor.management.add.repo.placeholder" = "owner/repo 或仓库 URL";
+"monitor.management.add.search.placeholder" = "Issue 或 Pull Request 搜索查询";
+"monitor.management.add.code.placeholder" = "代码搜索查询";
+"monitor.management.add.name.label" = "显示名称";
+"monitor.management.saved_search.label" = "已保存搜索";
+"monitor.management.saved_search.placeholder" = "-- 选择一个搜索 --";
+"monitor.management.sync_now" = "立即同步";
+"monitor.management.status.enabled" = "已启用";
+"monitor.management.status.disabled" = "已停用";
+"monitor.management.filters.title" = "事件过滤";
+"monitor.management.filters.description" = "选择哪些活动会触发系统通知。";
+"monitor.management.error.invalid_target" = "请输入有效的监控目标。";
+"monitor.management.error.not_authenticated" = "请先登录后再添加监控。";
+"monitor.management.error.duplicate" = "此目标已存在监控。";
+"monitor.management.error.account_not_found" = "未找到 GitHub 账号“%@”。";
+"monitor.management.error.repo_not_found" = "未找到 GitHub 代码库“%@”。";
+"monitor.event.kind.commits" = "提交";
+"monitor.event.kind.issues" = "Issues";
+"monitor.event.kind.prs" = "Pull Requests";
+"monitor.event.kind.releases" = "Releases";
+"monitor.event.kind.comments" = "评论";
+"monitor.event.kind.activity" = "其他动态";

@@ -17,13 +17,13 @@ jobs:
       - name: Create idoc config.
         run: |
           cat > idoc.yml << EOF
-          site: Branchlight
+          site: Lunt
           description: A quiet macOS menubar hub for GitHub work. Menubar-first workflow, unified Issues/PRs list, saved searches, and more.
-          keywords: macOS, GitHub, Branchlight, Menubar, SwiftUI, Developer Tools
-          favicon: Sources/GitHubNotifier/Resources/Assets.xcassets/AppIcon.appiconset/icon_256.png
-          logo: Sources/GitHubNotifier/Resources/Assets.xcassets/AppIcon.appiconset/icon_256.png
+          keywords: macOS, GitHub, Lunt, Menubar, SwiftUI, Developer Tools
+          favicon: Sources/Lunt/Resources/Assets.xcassets/AppIcon.appiconset/icon_256.png
+          logo: Sources/Lunt/Resources/Assets.xcassets/AppIcon.appiconset/icon_256.png
 
-          openSource: https://github.com/samzong/branchlight
+          openSource: https://github.com/samzong/lunt
 
           tocs: false
 
@@ -41,7 +41,7 @@ jobs:
             Copyright © {{idocYear}} <a href="https://github.com/samzong" target="_blank">samzong</a><br />
             <script>
               function downloadLatest() {
-                window.location.href = 'https://github.com/samzong/branchlight/releases/latest';
+                window.location.href = 'https://github.com/samzong/lunt/releases/latest';
               }
             </script>
           EOF
