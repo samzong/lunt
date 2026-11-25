@@ -1,6 +1,6 @@
-# Branchlight Rules Engine Guide
+# Lunt Rules Engine Guide
 
-The **Rules Engine** is a powerful feature in Branchlight designed to help you automatically filter, categorize, and manage your GitHub notifications. By defining custom rules, you can ensure critical notifications stand out while automatically handling distractions.
+The Rules Engine filters, categorizes, and manages your GitHub notifications in Lunt. Define custom rules so that critical notifications stand out.
 
 ## Accessing Rules Settings
 

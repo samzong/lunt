@@ -8,10 +8,10 @@ set -euo pipefail
 
 CONFIG="${1:-release}"
 ARCH="${2:-$(uname -m)}"
-APP_NAME="${APP_NAME:-Branchlight}"
-EXECUTABLE_NAME="${EXECUTABLE_NAME:-GitHubNotifier}"
-VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/GitHubNotifier/Info.plist)}"
-BUILD_NUMBER="${BUILD_NUMBER:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/GitHubNotifier/Info.plist)}"
+APP_NAME="${APP_NAME:-Lunt}"
+EXECUTABLE_NAME="${EXECUTABLE_NAME:-Lunt}"
+VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/Lunt/Info.plist)}"
+BUILD_NUMBER="${BUILD_NUMBER:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/Lunt/Info.plist)}"
 BUILD_DIR="$(swift build -c "$CONFIG" --triple "${ARCH}-apple-macosx" --show-bin-path)"
 
 BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
@@ -32,19 +32,16 @@ else
     exit 1
 fi
 
-# Copy Info.plist
-if [ -f "Sources/GitHubNotifier/Info.plist" ]; then
-    cp "Sources/GitHubNotifier/Info.plist" "${BUNDLE}/Contents/"
+if [ -f "Sources/Lunt/Info.plist" ]; then
+    cp "Sources/Lunt/Info.plist" "${BUNDLE}/Contents/"
     
-    # Update version numbers
     INFO_PLIST="${BUNDLE}/Contents/Info.plist"
     echo "===> Updating version to ${VERSION} (${BUILD_NUMBER})..."
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${INFO_PLIST}"
     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${INFO_PLIST}"
 fi
 
-# Copy Assets.xcassets (compile with actool if available, otherwise copy)
-ASSETS_PATH="Sources/GitHubNotifier/Resources/Assets.xcassets"
+ASSETS_PATH="Sources/Lunt/Resources/Assets.xcassets"
 if [ -d "${ASSETS_PATH}" ]; then
     if command -v actool &> /dev/null; then
         actool --compile "${BUNDLE}/Contents/Resources" \
@@ -58,8 +55,7 @@ if [ -d "${ASSETS_PATH}" ]; then
     fi
 fi
 
-# Copy localization resources
-for lproj in Sources/GitHubNotifier/Resources/*.lproj; do
+for lproj in Sources/Lunt/Resources/*.lproj; do
     if [ -d "$lproj" ]; then
         cp -r "$lproj" "${BUNDLE}/Contents/Resources/"
     fi
