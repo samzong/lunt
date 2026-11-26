@@ -16,19 +16,19 @@ public final class GitHubAPI: Sendable {
         return decoder
     }
 
-    /// Initializes a new GitHub REST API client.
-    ///
-    /// - Parameter token: GitHub personal access token for authentication
-    public init(token: String) {
+    public init(token: String, session: URLSession? = nil) {
         self.token = token
 
-        // GitHub notifications are time-sensitive; avoid stale results from URLSession/URLCache.
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 60
-        self.session = URLSession(configuration: configuration)
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            configuration.urlCache = nil
+            configuration.timeoutIntervalForRequest = 30
+            configuration.timeoutIntervalForResource = 60
+            self.session = URLSession(configuration: configuration)
+        }
     }
 
     // MARK: - Notifications (REST only - not available via GraphQL)

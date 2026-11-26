@@ -36,7 +36,19 @@ public struct SavedSearch: Codable, Identifiable, Hashable, Sendable {
     public var isEnabled: Bool
     public var isPinned: Bool
     public var type: SearchType
+    public var watchAlerts: Bool
     public var createdAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case query
+        case isEnabled
+        case isPinned
+        case type
+        case watchAlerts
+        case createdAt
+    }
 
     public init(
         id: UUID = UUID(),
@@ -45,6 +57,7 @@ public struct SavedSearch: Codable, Identifiable, Hashable, Sendable {
         isEnabled: Bool = true,
         isPinned: Bool = false,
         type: SearchType = .all,
+        watchAlerts: Bool = false,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -53,6 +66,19 @@ public struct SavedSearch: Codable, Identifiable, Hashable, Sendable {
         self.isEnabled = isEnabled
         self.isPinned = isPinned
         self.type = type
+        self.watchAlerts = watchAlerts
         self.createdAt = createdAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        query = try container.decode(String.self, forKey: .query)
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        isPinned = try container.decode(Bool.self, forKey: .isPinned)
+        type = try container.decode(SearchType.self, forKey: .type)
+        watchAlerts = try container.decodeIfPresent(Bool.self, forKey: .watchAlerts) ?? false
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
 }

@@ -12,7 +12,50 @@ struct SearchListView: View {
     let onItemTapped: (SearchResultItem) -> Void
 
     var body: some View {
-        content
+        VStack(spacing: 0) {
+            if let activeErrorMessage,
+               !(searchService.isLoading && displayedItems.isEmpty && displayedRepositories.isEmpty) {
+                errorBanner(activeErrorMessage)
+            }
+            content
+        }
+    }
+
+    private var activeErrorMessage: String? {
+        if let selectedSearchId {
+            return searchService.errorsBySearchId[selectedSearchId]
+        }
+        let enabledErrors = searchService.savedSearches
+            .filter(\.isEnabled)
+            .compactMap { search -> String? in
+                guard let error = searchService.errorsBySearchId[search.id] else { return nil }
+                return "\(search.name): \(error)"
+            }
+        guard !enabledErrors.isEmpty else { return nil }
+        return enabledErrors.joined(separator: "\n")
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .padding(.top, 1)
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.12))
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
     }
 
     // MARK: - Content

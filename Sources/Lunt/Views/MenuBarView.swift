@@ -56,24 +56,18 @@ struct MenuBarView: View {
         VStack(spacing: 0) {
             if hasToken {
                 HeaderView(
-                    selectedTab: Binding(
-                        get: { selectedMainTab },
-                        set: { selectedMainTab = $0 }
-                    ),
+                    selectedTab: rawBinding($selectedMainTabRawValue, default: .activity),
                     visibleTabs: visibleMainTabs,
                     unreadCount: notificationService.unreadCount,
                     currentUserLogin: notificationService.currentUser?.login,
-                    onOpenSettings: { openSettingsAndBringToFront() },
+                    onOpenSettings: { openSettingsAndActivate() },
                     onQuit: { NSApplication.shared.terminate(nil) }
                 )
 
                 Divider()
 
                 SubTabPickerView(
-                    selectedSubTab: Binding(
-                        get: { selectedSubTab },
-                        set: { selectedSubTab = $0 }
-                    ),
+                    selectedSubTab: rawBinding($selectedSubTabRawValue, default: .issues),
                     mainTab: effectiveMainTab,
                     allCount: currentAllCount,
                     issuesCount: currentIssuesCount,
@@ -88,21 +82,12 @@ struct MenuBarView: View {
                     ),
                     onMarkAsRead: markFilteredAsRead,
                     onRefresh: refreshCurrentTab,
-                    onManage: (effectiveMainTab == .search || effectiveMainTab == .watching) ? {
-                        if effectiveMainTab == .search {
-                            openAuxiliaryWindowAndBringToFront(window: .searchManagement)
-                        } else {
-                            openAuxiliaryWindowAndBringToFront(window: .monitorManagement)
-                        }
-                    } : nil
+                    onManage: manageAction
                 )
 
                 if effectiveMainTab == .activity {
                     FilterBarView(
-                        selectedFilter: Binding(
-                            get: { selectedActivityFilter },
-                            set: { selectedActivityFilter = $0 }
-                        ),
+                        selectedFilter: rawBinding($selectedActivityFilterRawValue, default: .all),
                         filterCounts: filterCounts
                     )
                     Divider()
@@ -113,7 +98,7 @@ struct MenuBarView: View {
                 contentView
                     .frame(maxHeight: .infinity, alignment: .top)
             } else {
-                WelcomeView(onOpenSettings: { openSettingsAndBringToFront(tab: .account) })
+                WelcomeView(onOpenSettings: { openSettingsAndActivate(tab: .account) })
             }
         }
         .frame(width: 380, height: 520)
@@ -132,7 +117,9 @@ struct MenuBarView: View {
             if newTab == .activity, selectedSubTab == .all {
                 selectedSubTab = .issues
             }
-            Task { await refreshCurrentTab() }
+            if shouldAutoRefreshOnTabSelect(newTab) {
+                Task { await refreshCurrentTab() }
+            }
         }
     }
 
@@ -185,7 +172,7 @@ struct MenuBarView: View {
                         .padding(.horizontal, 32)
 
                     Button("monitor.management.title".localized) {
-                        openAuxiliaryWindowAndBringToFront(window: .monitorManagement)
+                        openWindowAndActivate(.monitorManagement)
                     }
                     .liquidGlassButtonStyle(prominent: true)
                 }
@@ -287,18 +274,33 @@ struct MenuBarView: View {
 
     @MainActor
     private func initialLoad() async {
-        await notificationService.fetchCurrentUser()
-        if notificationService.notifications.isEmpty {
+        if notificationService.currentUser == nil {
+            await notificationService.fetchCurrentUser()
+        }
+        if notificationService.lastSyncedAt == nil {
             await notificationService.fetchNotifications()
         }
-        if activityService.items.isEmpty {
+        if activityService.lastSyncedAt == nil {
             await activityService.fetchMyItems()
         }
-        if searchService.items.isEmpty {
+        if searchService.lastSyncedAt == nil {
             await searchService.fetchAll()
         }
-        if monitorStore.events.isEmpty {
+        if monitorStore.lastSyncedAt.isEmpty {
             await monitorEngine.syncAll()
+        }
+    }
+
+    private func shouldAutoRefreshOnTabSelect(_ tab: MenuBarMainTab) -> Bool {
+        switch tab {
+        case .notifications:
+            notificationService.lastSyncedAt == nil
+        case .activity:
+            activityService.lastSyncedAt == nil
+        case .search:
+            searchService.lastSyncedAt == nil
+        case .watching:
+            monitorStore.lastSyncedAt.isEmpty
         }
     }
 
@@ -373,7 +375,6 @@ struct MenuBarView: View {
     }
 
     private func webURL(for notification: GitHubNotification) -> URL? {
-        // Prefer constructing URL from known components
         if let number = notification.issueOrPRNumber {
             let baseURL = notification.repository.htmlUrl
             switch notification.notificationType {
@@ -381,25 +382,40 @@ struct MenuBarView: View {
                 return URL(string: "\(baseURL)/pull/\(number)")
             case .issue:
                 return URL(string: "\(baseURL)/issues/\(number)")
-            case .commit:
-                // For commits finding the SHA from subject url is safer than fragile parsing
-                // But given we don't have SHA easily available in top level model without parsing subject.url,
-                // we'll fallback to a safer subject.url replacement or just repository root if complex.
-                break
             default:
                 break
             }
         }
 
-        // Fallback: If we have subject.url (API URL), try to convert to HTML URL generally
         if let apiURLString = notification.subject.url {
             return URL(string: apiURLString
                 .replacingOccurrences(of: "api.github.com/repos", with: "github.com")
-                .replacingOccurrences(of: "/pulls/", with: "/pull/") // API uses pulls, HTML uses pull
+                .replacingOccurrences(of: "/pulls/", with: "/pull/")
             )
         }
 
         return URL(string: notification.repository.htmlUrl)
+    }
+
+    private func rawBinding<T: RawRepresentable>(
+        _ storage: Binding<String>,
+        default fallback: T
+    ) -> Binding<T> where T.RawValue == String {
+        Binding(
+            get: { T(rawValue: storage.wrappedValue) ?? fallback },
+            set: { storage.wrappedValue = $0.rawValue }
+        )
+    }
+
+    private var manageAction: (() -> Void)? {
+        switch effectiveMainTab {
+        case .search:
+            { openWindowAndActivate(.searchManagement) }
+        case .watching:
+            { openWindowAndActivate(.monitorManagement) }
+        default:
+            nil
+        }
     }
 
     private func clearInitialFocus() {
@@ -408,22 +424,20 @@ struct MenuBarView: View {
         }
     }
 
-    private func openSettingsAndBringToFront(tab: SettingsTab? = nil) {
+    private func openSettingsAndActivate(tab: SettingsTab? = nil) {
         settingsNavigationState.open(tab: tab)
         closeMenuBarWindow()
         openSettings()
-
-        // Activate the app to bring Settings window to front
-        // The Settings scene handles its own window management
-        Task { @MainActor in
-            NSApplication.shared.activate(ignoringOtherApps: true)
-        }
+        activateApp()
     }
 
-    private func openAuxiliaryWindowAndBringToFront(window: WindowIdentifier) {
+    private func openWindowAndActivate(_ window: WindowIdentifier) {
         closeMenuBarWindow()
         openWindow(id: window.rawValue)
+        activateApp()
+    }
 
+    private func activateApp() {
         Task { @MainActor in
             NSApplication.shared.activate(ignoringOtherApps: true)
         }
@@ -434,74 +448,6 @@ struct MenuBarView: View {
         dismiss()
         if let keyWindow = NSApplication.shared.keyWindow {
             keyWindow.performClose(nil)
-        }
-    }
-}
-
-struct MenuBarEventRow: View {
-    let event: MonitorEvent
-    let onTap: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: iconForEventKind(event.kind))
-                .font(.system(size: 13))
-                .foregroundStyle(colorForEventKind(event.kind))
-                .frame(width: 24, height: 24)
-                .background(colorForEventKind(event.kind).opacity(0.12))
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    if !event.actor.isEmpty {
-                        Text("@\(event.actor)")
-                            .fontWeight(.semibold)
-                    }
-                    Text(event.repo)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(event.occurredAt.timeAgo())
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .font(.caption)
-
-                Text(event.title)
-                    .font(.subheadline)
-                    .foregroundStyle(event.isRead ? .secondary : .primary)
-                    .fontWeight(event.isRead ? .regular : .semibold)
-                    .lineLimit(2)
-            }
-        }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 12)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
-        }
-    }
-
-    private func iconForEventKind(_ kind: String) -> String {
-        switch kind {
-        case "commit": "arrow.triangle.pull"
-        case "issue": "exclamationmark.bubble"
-        case "pr": "arrow.triangle.merge"
-        case "release": "shippingbox"
-        case "comment": "text.bubble"
-        case "code_match": "doc.text.magnifyingglass"
-        default: "bell"
-        }
-    }
-
-    private func colorForEventKind(_ kind: String) -> Color {
-        switch kind {
-        case "commit": .blue
-        case "issue": .green
-        case "pr": .purple
-        case "release": .orange
-        case "comment": .teal
-        case "code_match": .cyan
-        default: .secondary
         }
     }
 }
