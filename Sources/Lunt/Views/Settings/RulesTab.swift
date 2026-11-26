@@ -36,10 +36,10 @@ struct RulesTab: View {
                     Spacer()
 
                     Menu {
-                        Button("Import Rules...") {
+                        Button("rules.import".localized) {
                             importRules()
                         }
-                        Button("Export Rules...") {
+                        Button("rules.export".localized) {
                             exportRules()
                         }
                     } label: {
@@ -104,7 +104,7 @@ struct RulesTab: View {
     private func exportRules() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "github_notifier_rules.json"
+        panel.nameFieldStringValue = "lunt_rules.json"
 
         panel.begin { response in
             if response == .OK, let url = panel.url {

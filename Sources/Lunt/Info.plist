@@ -9,9 +9,9 @@
     <key>CFBundleDisplayName</key>
     <string>Lunt</string>
     <key>CFBundleVersion</key>
-    <string>88</string>
+    <string>89</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.5.6</string>
+    <string>0.6.0</string>
     <key>CFBundleExecutable</key>
     <string>Lunt</string>
     <key>CFBundlePackageType</key>
@@ -36,16 +36,5 @@
     <string>Xqf5B0TuOjxRegR76wxXvw7fIOc+6Pj1IZ5IVBbM4qw=</string>
     <key>GitHubOAuthClientID</key>
     <string>Ov23li1rOHiShoEHTNSk</string>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>com.samzong.lunt</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>lunt</string>
-            </array>
-        </dict>
-    </array>
 </dict>
 </plist>

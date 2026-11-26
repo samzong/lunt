@@ -1,10 +1,8 @@
 import Foundation
 
-/// Identifiers for auxiliary windows in the application.
-/// New window types can be added here to extend functionality.
 public enum WindowIdentifier: String, CaseIterable, Identifiable, Sendable {
-    case searchManagement
-    case monitorManagement
+    case searchManagement = "search-management"
+    case monitorManagement = "monitor-management"
 
     public var id: String {
         rawValue
@@ -13,9 +11,9 @@ public enum WindowIdentifier: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .searchManagement:
-            "Manage Saved Searches"
+            "search.management.title".localized
         case .monitorManagement:
-            "Manage Monitors"
+            "monitor.management.title".localized
         }
     }
 

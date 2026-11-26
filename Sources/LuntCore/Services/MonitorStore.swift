@@ -145,23 +145,19 @@ public final class MonitorStore {
         }
     }
 
-    /// Repairs stored monitor events from freshly fetched canonical source events.
     public func repairEvents(using canonicalEvents: [MonitorEvent]) {
         guard !canonicalEvents.isEmpty, !events.isEmpty else { return }
 
         var exactMatches: [String: MonitorEvent] = [:]
-        var legacyMatches: [String: MonitorEvent] = [:]
         for canonicalEvent in canonicalEvents {
             exactMatches[canonicalEvent.id] = canonicalEvent
-            legacyMatches["\(canonicalEvent.targetId.uuidString):\(sourceId(from: canonicalEvent.id))"] = canonicalEvent
         }
 
         var repairedEvents: [MonitorEvent] = []
         var didRepair = false
 
         for event in events {
-            let canonical = exactMatches[event.id] ?? legacyMatches["\(event.targetId.uuidString):\(event.id)"]
-            guard let canonical else {
+            guard let canonical = exactMatches[event.id] else {
                 repairedEvents.append(event)
                 continue
             }
@@ -252,7 +248,6 @@ public final class MonitorStore {
         if let data = defaults.data(forKey: eventsKey),
            let decoded = try? JSONDecoder().decode([MonitorEvent].self, from: data) {
             self.events = decoded
-            repairLegacyStoredEvents()
         }
 
         if let data = defaults.data(forKey: cursorsKey),
@@ -270,77 +265,5 @@ public final class MonitorStore {
                 return (uuid, item.value)
             })
         }
-    }
-
-    private func repairLegacyStoredEvents() {
-        var didRepair = false
-        events = events.map { event in
-            if let repairedEvent = repairedLegacyActivityEvent(event) {
-                didRepair = true
-                return repairedEvent
-            }
-
-            let repoHomeURL = "https://github.com/\(event.repo)"
-            guard event.kind == "commit", event.url == repoHomeURL else {
-                return event
-            }
-
-            didRepair = true
-            return MonitorEvent(
-                id: event.id,
-                kind: event.kind,
-                targetId: event.targetId,
-                actor: event.actor,
-                repo: event.repo,
-                title: event.title,
-                url: "\(repoHomeURL)/commits",
-                occurredAt: event.occurredAt,
-                isRead: event.isRead
-            )
-        }
-
-        if didRepair {
-            saveEvents()
-        }
-    }
-
-    private func repairedLegacyActivityEvent(_ event: MonitorEvent) -> MonitorEvent? {
-        guard event.kind == "activity" else { return nil }
-
-        switch event.title {
-        case "Triggered PushEvent activity":
-            let repoHomeURL = "https://github.com/\(event.repo)"
-            let url = event.url == repoHomeURL ? "\(repoHomeURL)/commits" : event.url
-            return legacyEvent(from: event, kind: "commit", title: "Pushed commits to repository", url: url)
-        case "Triggered IssueCommentEvent activity":
-            return legacyEvent(from: event, kind: "comment", title: "Commented on issue", url: event.url)
-        case "Triggered PullRequestReviewCommentEvent activity":
-            return legacyEvent(from: event, kind: "comment", title: "Commented on pull request", url: event.url)
-        case "Triggered CommitCommentEvent activity":
-            return legacyEvent(from: event, kind: "comment", title: "Commented on commit", url: event.url)
-        default:
-            return nil
-        }
-    }
-
-    private func legacyEvent(from event: MonitorEvent, kind: String, title: String, url: String) -> MonitorEvent {
-        MonitorEvent(
-            id: event.id,
-            kind: kind,
-            targetId: event.targetId,
-            actor: event.actor,
-            repo: event.repo,
-            title: title,
-            url: url,
-            occurredAt: event.occurredAt,
-            isRead: event.isRead
-        )
-    }
-
-    private func sourceId(from eventId: String) -> String {
-        guard let separatorIndex = eventId.firstIndex(of: ":") else {
-            return eventId
-        }
-        return String(eventId[eventId.index(after: separatorIndex)...])
     }
 }

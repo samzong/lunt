@@ -62,8 +62,6 @@ public class ActivityService {
         self.session = session
     }
 
-    public func configure() {}
-
     public func clearToken() {
         createdIssues = []
         createdPRs = []
@@ -138,15 +136,5 @@ public class ActivityService {
 
     public func count(for filter: ActivityFilter) -> Int {
         items(for: filter).count
-    }
-
-    // MARK: - Legacy Accessors (for backward compatibility)
-
-    public var pullRequests: [SearchResultItem] {
-        pullRequests(for: .all)
-    }
-
-    public var issues: [SearchResultItem] {
-        issues(for: .all)
     }
 }
