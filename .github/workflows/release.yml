@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     name: Build and Release
-    runs-on: macos-latest
+    runs-on: macos-15
     permissions:
       contents: write
       pull-requests: read
@@ -66,37 +66,29 @@ jobs:
         run: |
           make VERSION="$SEMVER" dmg
 
-      - name: Verify DMG Files
+      - name: Verify DMG File
         run: |
-          echo "===> Checking DMG files..."
+          set -euo pipefail
           ls -lh .build/*.dmg
-          
-          echo "===> Verifying x86_64 DMG..."
-          hdiutil verify .build/Lunt-${{ env.SEMVER }}-x86_64.dmg
-          
-          echo "===> Verifying arm64 DMG..."
-          hdiutil verify .build/Lunt-${{ env.SEMVER }}-arm64.dmg
+          test -f ".build/Lunt-${{ env.SEMVER }}-arm64.dmg"
+          test ! -e ".build/Lunt-${{ env.SEMVER }}-x86_64.dmg"
+          test ! -e ".build/Lunt-${{ env.SEMVER }}-universal.dmg"
+          hdiutil verify ".build/Lunt-${{ env.SEMVER }}-arm64.dmg"
+          MOUNT_DIR="$(mktemp -d "$RUNNER_TEMP/lunt-dmg.XXXXXX")"
+          trap 'hdiutil detach "$MOUNT_DIR" -quiet || true; rm -rf "$MOUNT_DIR"' EXIT
+          hdiutil attach ".build/Lunt-${{ env.SEMVER }}-arm64.dmg" -nobrowse -readonly -mountpoint "$MOUNT_DIR"
+          test "$(lipo -archs "$MOUNT_DIR/Lunt.app/Contents/MacOS/Lunt")" = "arm64"
+          codesign --verify --deep --strict "$MOUNT_DIR/Lunt.app"
 
-          hdiutil verify .build/Lunt-${{ env.SEMVER }}-universal.dmg
-
-      - name: Sign DMGs with Sparkle
+      - name: Sign DMG with Sparkle
         env:
           SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
         run: |
+          set -euo pipefail
           SIGN_UPDATE="sign_update"
-          
           xattr -cr "${SIGN_UPDATE}" 2>/dev/null || true
-          
-          echo "===> Signing x86_64 DMG..."
-          X86_SIG=$("${SIGN_UPDATE}" .build/Lunt-${{ env.SEMVER }}-x86_64.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
-          echo "X86_SIG=${X86_SIG}" >> "$GITHUB_ENV"
-          
-          echo "===> Signing arm64 DMG..."
-          ARM_SIG=$("${SIGN_UPDATE}" .build/Lunt-${{ env.SEMVER }}-arm64.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
+          ARM_SIG=$("${SIGN_UPDATE}" ".build/Lunt-${{ env.SEMVER }}-arm64.dmg" --ed-key-file <(echo "$SPARKLE_ED_KEY"))
           echo "ARM_SIG=${ARM_SIG}" >> "$GITHUB_ENV"
-
-          UNIVERSAL_SIG=$("${SIGN_UPDATE}" .build/Lunt-${{ env.SEMVER }}-universal.dmg --ed-key-file <(echo "$SPARKLE_ED_KEY"))
-          echo "UNIVERSAL_SIG=${UNIVERSAL_SIG}" >> "$GITHUB_ENV"
 
       - name: Generate Appcast
         run: |
@@ -118,10 +110,10 @@ jobs:
                 <sparkle:shortVersionString>${{ env.SEMVER }}</sparkle:shortVersionString>
                 <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
                 <enclosure
-                  url="https://github.com/samzong/lunt/releases/download/${{ env.VERSION }}/Lunt-${{ env.SEMVER }}-universal.dmg"
+                  url="https://github.com/samzong/lunt/releases/download/${{ env.VERSION }}/Lunt-${{ env.SEMVER }}-arm64.dmg"
                   type="application/octet-stream"
                   sparkle:os="macos"
-                  ${UNIVERSAL_SIG}
+                  ${ARM_SIG}
                 />
               </item>
             </channel>
@@ -130,6 +122,10 @@ jobs:
           
           echo "===> Generated appcast.xml:"
           cat .build/appcast.xml
+          xmllint --noout .build/appcast.xml
+          test "$(grep -c '<enclosure' .build/appcast.xml)" -eq 1
+          grep -Fq "Lunt-${{ env.SEMVER }}-arm64.dmg" .build/appcast.xml
+          ! grep -Eq 'x86_64|universal' .build/appcast.xml
 
       - name: Generate Release Notes
         id: release_notes
@@ -154,9 +150,7 @@ jobs:
           make_latest: ${{ steps.get_version.outputs.is_prerelease == 'true' && 'false' || 'true' }}
           fail_on_unmatched_files: true
           files: |
-            .build/Lunt-${{ env.SEMVER }}-x86_64.dmg
             .build/Lunt-${{ env.SEMVER }}-arm64.dmg
-            .build/Lunt-${{ env.SEMVER }}-universal.dmg
             .build/appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

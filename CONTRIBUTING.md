@@ -20,7 +20,7 @@ Please be respectful and constructive in all interactions. We welcome contributo
 
 ### Prerequisites
 
-- macOS 15.0 or later
+- macOS 15.0 or later on Apple Silicon (`arm64`)
 - Swift 6
 - [SwiftFormat](https://github.com/nicklockwood/SwiftFormat) - `brew install swiftformat`
 - [SwiftLint](https://github.com/realm/SwiftLint) - `brew install swiftlint`
@@ -43,16 +43,9 @@ Please be respectful and constructive in all interactions. We welcome contributo
 ### Building the Project
 
 ```bash
-# Build debug version
 make build
-
-# Build release DMGs
 make dmg
-
-# Build and run for development
 make run
-
-# Install to ~/Applications
 make install
 ```
 
