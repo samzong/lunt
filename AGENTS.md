@@ -120,3 +120,23 @@ Before using any less common CLI flag, verify it with `--help` or official docum
 - Homebrew updates belong to the centralized `samzong/homebrew-tap` package scan.
 - The `idoc` workflow publishes docs from `main`. Keep README product names aligned with `Lunt`.
 - Avoid changing release/signing/appcast behavior without verifying the corresponding workflow or script path.
+
+## Merge gate
+
+Gate contract maintained under the `merge-gate` skill. Green results on the checks below mean a PR is safe to merge for the listed properties. Everything else stays with the human reviewer.
+
+| Property | Local | CI |
+| --- | --- | --- |
+| SwiftLint rules | `make lint` | `ci.yml`: `build-test` (`make lint`) |
+| SwiftFormat rules | `make format-check` | `ci.yml`: `build-test` (`make format-check`) |
+| Debug app build | `make build` | `ci.yml`: `build-test` (`make build`) |
+| Packaged bundle and metadata parity | `make verify-bundle` | `ci.yml`: `build-test` (`make verify-bundle`) |
+| Unit tests | `make test` | `ci.yml`: `build-test` (`make test`) |
+| Blueprint prototype check | `blueprint check prototype` | not run |
+| Release DMG and appcast verification | `make dmg` and `Scripts/verify_release_artifacts.py` | `release.yml`: `release` (`Verify DMG File` and `Generate Appcast`) |
+
+Not covered by any check: live macOS menu bar UI, Settings window behavior, Keychain token persistence, Sparkle runtime update installation, and Xcode app notarization. The agent or maintainer verifies these items by hand when changed.
+
+Human review owns: product intent, change scope, public semantics, release timing, and compatibility decisions.
+
+Required status checks: none enforced as of 2026-11-25. Repository ruleset 11970254 blocks branch deletion and non-fast-forward pushes on main. Ledger: Issues labeled `gate-miss` and `gate-false-block`.
