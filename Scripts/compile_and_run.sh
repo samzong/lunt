@@ -2,6 +2,16 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESOLVED_DEVELOPER_DIR="$("${SCRIPT_DIR}/resolve_developer_dir.sh")"
+if [ -n "${RESOLVED_DEVELOPER_DIR}" ]; then
+    export DEVELOPER_DIR="${RESOLVED_DEVELOPER_DIR}"
+fi
+if ! xcrun --find actool >/dev/null 2>&1; then
+    echo "❌ Error: Xcode is required to compile Assets.xcassets. Install Xcode or set DEVELOPER_DIR." >&2
+    exit 1
+fi
+
 CONFIG="${1:-debug}"
 APP_NAME="${APP_NAME:-Lunt}"
 EXECUTABLE_NAME="${EXECUTABLE_NAME:-Lunt}"
