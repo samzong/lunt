@@ -17,10 +17,13 @@ struct WorkspaceSearchDetailView: View {
 
     private var queryWebURL: URL? {
         let trimmed = search.query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-        else { return nil }
-        return URL(string: "https://github.com/search?q=\(encoded)")
+        guard !trimmed.isEmpty else { return nil }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "github.com"
+        components.path = "/search"
+        components.queryItems = [URLQueryItem(name: "q", value: trimmed)]
+        return components.url
     }
 
     var body: some View {

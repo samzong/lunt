@@ -187,6 +187,23 @@ struct MenuBarView: View {
             noticeTask?.cancel()
         }
         .onChange(of: visibleTabs) { _, _ in normalizeSelectedMainTabIfNeeded() }
+        .onChange(of: pinnedSearches.map(\.id)) { _, _ in
+            workScope = PopoverFeedProjection.validatedWorkScope(workScope, pinnedSearches: pinnedSearches)
+        }
+        .onChange(of: activeMonitors.map(\.id)) { _, _ in
+            watchScope = PopoverFeedProjection.validatedWatchScope(
+                watchScope,
+                activeMonitors: activeMonitors,
+                alertSearches: alertSearches
+            )
+        }
+        .onChange(of: alertSearches.map(\.id)) { _, _ in
+            watchScope = PopoverFeedProjection.validatedWatchScope(
+                watchScope,
+                activeMonitors: activeMonitors,
+                alertSearches: alertSearches
+            )
+        }
         .onChange(of: selectedMainTabRawValue) { _, _ in
             activeRowIndex = 0
             if PopoverFeedProjection.shouldAutoRefresh(context: feedContext) {

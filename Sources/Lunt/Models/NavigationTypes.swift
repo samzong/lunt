@@ -83,6 +83,12 @@ public enum MenuBarMainTab: String, CaseIterable, Identifiable, Sendable {
     public static func fallbackTab(from defaults: UserDefaults = .standard) -> MenuBarMainTab {
         displayOrder.first(where: { $0.isVisible(in: defaults) }) ?? .inbox
     }
+
+    public static func migrateLegacyVisibilityKeysIfNeeded(in defaults: UserDefaults = .standard) {
+        for tab in displayOrder where defaults.object(forKey: tab.visibilityPreferenceKey) == nil {
+            defaults.set(tab.isVisible(in: defaults), forKey: tab.visibilityPreferenceKey)
+        }
+    }
 }
 
 public enum InboxScope: String, CaseIterable, Identifiable, Sendable {

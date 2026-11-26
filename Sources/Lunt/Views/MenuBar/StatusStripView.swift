@@ -87,7 +87,10 @@ final class PopoverKeyMonitor {
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
             let incoming = UncheckedEventBox(event: event)
             return MainActor.assumeIsolated {
-                UncheckedOptionalEventBox(event: self?.handler?(incoming.event) ?? incoming.event)
+                guard let self, let handler = self.handler else {
+                    return UncheckedOptionalEventBox(event: incoming.event)
+                }
+                return UncheckedOptionalEventBox(event: handler(incoming.event))
             }.event
         }
     }

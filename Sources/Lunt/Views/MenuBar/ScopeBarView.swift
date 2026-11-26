@@ -78,7 +78,7 @@ enum PopoverFeedProjection {
         activeMonitors: [MonitorDefinition],
         alertSearches: [SavedSearch]
     ) -> [MonitorEvent] {
-        let monitorsById = Dictionary(uniqueKeysWithValues: activeMonitors.map { ($0.id, $0) })
+        let monitorsById = Dictionary(activeMonitors.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let alertIds = Set(alertSearches.map(\.id))
 
         return events.filter { event in

@@ -127,7 +127,7 @@ struct UnifiedRowModel: Identifiable, Sendable {
     static func fromMonitorEvent(_ event: MonitorEvent) -> UnifiedRowModel {
         let formattedActor: String? = if event.actor.isEmpty {
             nil
-        } else if event.actor.hasPrefix("@") {
+        } else if event.actor.hasPrefix("query:") || event.actor.hasPrefix("@") {
             event.actor
         } else {
             "@\(event.actor)"
@@ -145,7 +145,7 @@ struct UnifiedRowModel: Identifiable, Sendable {
             date: event.occurredAt,
             isUnread: !event.isRead,
             isPullRequest: event.kind.lowercased() == "pr",
-            url: URL(string: event.url),
+            url: URL.validatedGitHubWebURL(from: event.url),
             source: .monitorEvent(event)
         )
     }
@@ -232,23 +232,19 @@ struct UnifiedRowModel: Identifiable, Sendable {
             let baseURL = notification.repository.htmlUrl
             switch notification.notificationType {
             case .pullRequest:
-                return URL(string: "\(baseURL)/pull/\(number)")
+                return URL.validatedGitHubWebURL(from: "\(baseURL)/pull/\(number)")
             case .issue:
-                return URL(string: "\(baseURL)/issues/\(number)")
+                return URL.validatedGitHubWebURL(from: "\(baseURL)/issues/\(number)")
             default:
                 break
             }
         }
 
         if let apiURLString = notification.subject.url {
-            let webString = apiURLString
-                .replacingOccurrences(of: "api.github.com", with: "github.com")
-                .replacingOccurrences(of: "/repos/", with: "/")
-                .replacingOccurrences(of: "/pulls/", with: "/pull/")
-            return URL(string: webString)
+            return URL.validatedGitHubAPISubjectWebURL(from: apiURLString)
         }
 
-        return URL(string: notification.repository.htmlUrl)
+        return URL.validatedGitHubWebURL(from: notification.repository.htmlUrl)
     }
 }
 

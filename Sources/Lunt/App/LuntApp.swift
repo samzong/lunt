@@ -14,6 +14,7 @@ struct LuntApp: App {
     @State private var workspaceNavigationState = WorkspaceNavigationState()
     @State private var monitorStore: MonitorStore
     @State private var monitorEngine: MonitorEngine
+    @State private var startupTask: Task<Void, Never>?
     private let appConfiguration: AppConfiguration
     private let updaterController: SPUStandardUpdaterController
 
@@ -53,12 +54,14 @@ struct LuntApp: App {
         search.monitorStore = store
         search.notificationManager = NotificationManager.shared
         store.migrateLegacyMonitors(into: search)
+        MenuBarMainTab.migrateLegacyVisibilityKeysIfNeeded()
 
         let configuredInterval = UserDefaults.standard.double(forKey: UserPreferences.refreshIntervalKey)
         let interval = configuredInterval > 0 ? configuredInterval : 60
 
-        Task { @MainActor in
+        _startupTask = State(initialValue: Task { @MainActor in
             if let token = await AuthStore.shared.currentToken() {
+                guard !Task.isCancelled else { return }
                 sessionInstance.configure(token: token)
                 service.startAutoRefresh(interval: interval)
                 itemsService.configure(interval: interval)
@@ -66,9 +69,13 @@ struct LuntApp: App {
                 search.updateRefreshInterval(interval)
 
                 await service.fetchCurrentUser()
+                guard !Task.isCancelled, sessionInstance.isAuthenticated else { return }
                 await service.fetchNotifications()
+                guard !Task.isCancelled, sessionInstance.isAuthenticated else { return }
                 await itemsService.fetchMyItems()
+                guard !Task.isCancelled, sessionInstance.isAuthenticated else { return }
                 await search.fetchAll()
+                guard !Task.isCancelled, sessionInstance.isAuthenticated else { return }
 
                 engine.start(interval: interval)
             }
@@ -76,7 +83,7 @@ struct LuntApp: App {
             if UserDefaults.standard.bool(forKey: "enableSystemNotifications") {
                 _ = await NotificationManager.shared.requestAuthorization()
             }
-        }
+        })
     }
 
     var body: some Scene {
@@ -99,6 +106,8 @@ struct LuntApp: App {
                 let configured = UserDefaults.standard.double(forKey: UserPreferences.refreshIntervalKey)
                 monitorEngine.start(interval: configured > 0 ? configured : 60)
             } else {
+                startupTask?.cancel()
+                startupTask = nil
                 monitorEngine.stop()
                 monitorStore.clearEvents()
             }

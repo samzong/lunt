@@ -208,7 +208,7 @@ struct WorkspaceMonitorDetailView: View {
                             if !event.isRead {
                                 monitorStore.markEventRead(id: event.id)
                             }
-                            if let url = URL(string: event.url) {
+                            if let url = URL.validatedGitHubWebURL(from: event.url) {
                                 NSWorkspace.shared.open(url)
                             }
                         },

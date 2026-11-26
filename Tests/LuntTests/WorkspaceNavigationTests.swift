@@ -105,4 +105,17 @@ final class WorkspaceNavigationTests: XCTestCase {
         XCTAssertEqual(secondPending?.mode, .monitors)
         XCTAssertEqual(secondPending?.createNew, false)
     }
+
+    func test_migrateLegacyVisibilityKeysIfNeeded_writesMissingKeysWithoutOverwritingExisting() {
+        defaults.set(false, forKey: UserPreferences.menubarShowNotificationsTabKey)
+        defaults.set(true, forKey: UserPreferences.menubarShowInboxTabKey)
+        defaults.set(false, forKey: UserPreferences.menubarShowActivityTabKey)
+        defaults.set(false, forKey: UserPreferences.menubarShowSearchTabKey)
+
+        MenuBarMainTab.migrateLegacyVisibilityKeysIfNeeded(in: defaults)
+
+        XCTAssertEqual(defaults.object(forKey: UserPreferences.menubarShowInboxTabKey) as? Bool, true)
+        XCTAssertEqual(defaults.object(forKey: UserPreferences.menubarShowWorkTabKey) as? Bool, false)
+        XCTAssertEqual(defaults.object(forKey: UserPreferences.menubarShowWatchTabKey) as? Bool, true)
+    }
 }

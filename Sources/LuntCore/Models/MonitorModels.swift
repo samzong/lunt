@@ -148,14 +148,19 @@ extension MonitorTarget {
 
         if clean.lowercased().hasPrefix("http://") || clean.lowercased().hasPrefix("https://") {
             guard let url = URL(string: clean),
-                  let host = url.host,
-                  host.contains("github.com") else {
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https",
+                  let host = url.host?.lowercased(),
+                  host == "github.com" || host == "www.github.com"
+            else {
                 return nil
             }
             let pathComponents = url.pathComponents.filter { $0 != "/" && !$0.isEmpty }
-            if pathComponents.count == 1 {
+            if pathComponents.count == 1, isValidOwnerOrLogin(pathComponents[0]) {
                 return .account(login: pathComponents[0])
-            } else if pathComponents.count >= 2 {
+            } else if pathComponents.count >= 2,
+                      isValidOwnerOrLogin(pathComponents[0]),
+                      isValidRepoName(pathComponents[1]) {
                 return .repository(owner: pathComponents[0], name: pathComponents[1])
             }
             return nil
@@ -164,16 +169,31 @@ extension MonitorTarget {
         switch type {
         case "account":
             let login = clean.hasPrefix("@") ? String(clean.dropFirst()) : clean
-            guard !login.isEmpty else { return nil }
+            guard isValidOwnerOrLogin(login) else { return nil }
             return .account(login: login)
         case "repository":
-            let parts = clean.split(separator: "/")
-            if parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty {
-                return .repository(owner: String(parts[0]), name: String(parts[1]))
+            let parts = clean.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+            if parts.count == 2,
+               isValidOwnerOrLogin(parts[0]),
+               isValidRepoName(parts[1]) {
+                return .repository(owner: parts[0], name: parts[1])
             }
             return nil
         default:
             return nil
         }
+    }
+
+    private static func isValidOwnerOrLogin(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= 39 else { return false }
+        return value.range(
+            of: #"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9]))*$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private static func isValidRepoName(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= 100, value != ".", value != ".." else { return false }
+        return value.range(of: #"^[A-Za-z0-9._-]+$"#, options: .regularExpression) != nil
     }
 }

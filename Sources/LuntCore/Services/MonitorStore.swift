@@ -358,18 +358,24 @@ public final class MonitorStore {
 
         if let data = defaults.data(forKey: cursorsKey),
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
-            cursors = Dictionary(uniqueKeysWithValues: decoded.compactMap { item in
-                guard let uuid = UUID(uuidString: item.key) else { return nil }
-                return (uuid, item.value)
-            })
+            cursors = Dictionary(
+                decoded.compactMap { item in
+                    guard let uuid = UUID(uuidString: item.key) else { return nil }
+                    return (uuid, item.value)
+                },
+                uniquingKeysWith: { _, latest in latest }
+            )
         }
 
         if let data = defaults.data(forKey: lastSyncedAtKey),
            let decoded = try? JSONDecoder().decode([String: Date].self, from: data) {
-            lastSyncedAt = Dictionary(uniqueKeysWithValues: decoded.compactMap { item in
-                guard let uuid = UUID(uuidString: item.key) else { return nil }
-                return (uuid, item.value)
-            })
+            lastSyncedAt = Dictionary(
+                decoded.compactMap { item in
+                    guard let uuid = UUID(uuidString: item.key) else { return nil }
+                    return (uuid, item.value)
+                },
+                uniquingKeysWith: { _, latest in latest }
+            )
         }
     }
 }

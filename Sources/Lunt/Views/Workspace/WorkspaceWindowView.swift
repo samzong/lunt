@@ -121,12 +121,16 @@ struct WorkspaceWindowView: View {
         }
         .onDisappear { statusTask?.cancel() }
         .onChange(of: workspaceNavigationState.pendingMode) { _, _ in applyPendingNavigation() }
-        .onChange(of: selectedMonitorId) { _, _ in
-            confirmingDeleteMonitorId = nil
+        .onChange(of: selectedMonitorId) { _, newValue in
+            if confirmingDeleteMonitorId != newValue {
+                confirmingDeleteMonitorId = nil
+            }
             editingMonitor = nil
         }
-        .onChange(of: selectedSearchId) { _, _ in
-            confirmingDeleteSearchId = nil
+        .onChange(of: selectedSearchId) { _, newValue in
+            if confirmingDeleteSearchId != newValue {
+                confirmingDeleteSearchId = nil
+            }
             editingSearch = nil
         }
         .onChange(of: monitorStore.monitors.map(\.id)) { _, _ in ensureValidSelection() }

@@ -154,7 +154,13 @@ public class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         content.title = String(format: NSLocalizedString("notification.monitor.title", comment: ""), event.repo)
         content.subtitle = event.title
 
-        let actorText = event.actor.isEmpty ? "" : "by @\(event.actor)"
+        let actorText: String = if event.actor.isEmpty {
+            ""
+        } else if event.actor.hasPrefix("query:") || event.actor.hasPrefix("@") {
+            event.actor
+        } else {
+            "by @\(event.actor)"
+        }
         let timeText = event.occurredAt.timeAgo()
         let kindText = event.kind.uppercased()
 
@@ -162,7 +168,9 @@ public class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
 
         var userInfo: [String: Any] = ["monitorEventId": event.id]
-        userInfo["url"] = event.url
+        if let safeURL = URL.validatedGitHubWebURL(from: event.url)?.absoluteString {
+            userInfo["url"] = safeURL
+        }
         content.userInfo = userInfo
 
         let identifier = "monitor-\(event.id)-\(Date().timeIntervalSince1970)"
@@ -179,8 +187,6 @@ public class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    // MARK: - UNUserNotificationCenterDelegate
-
     public nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
@@ -190,7 +196,7 @@ public class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
         Task { @MainActor in
             if let urlString = userInfo["url"] as? String,
-               let url = URL(string: urlString) {
+               let url = URL.validatedGitHubWebURL(from: urlString) {
                 NSWorkspace.shared.open(url)
             }
 
@@ -242,12 +248,13 @@ public class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         switch notification.notificationType {
         case .pullRequest, .issue:
             guard let number = notification.issueOrPRNumber else {
-                return notification.repository.htmlUrl
+                return URL.validatedGitHubWebURL(from: notification.repository.htmlUrl)?.absoluteString
             }
             let type = notification.notificationType == .pullRequest ? "pull" : "issues"
-            return "https://github.com/\(owner)/\(repo)/\(type)/\(number)"
+            let raw = "https://github.com/\(owner)/\(repo)/\(type)/\(number)"
+            return URL.validatedGitHubWebURL(from: raw)?.absoluteString
         default:
-            return notification.repository.htmlUrl
+            return URL.validatedGitHubWebURL(from: notification.repository.htmlUrl)?.absoluteString
         }
     }
 

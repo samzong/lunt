@@ -12,6 +12,7 @@ public final class MonitorEngine {
     private let logger = Logger(subsystem: "com.samzong.lunt", category: "MonitorEngine")
 
     private var timer: Task<Void, Never>?
+    private var activeSingleSyncTasks: [UUID: Task<Void, Never>] = [:]
     public private(set) var isSyncing = false
     public private(set) var errorsByMonitorId: [UUID: String] = [:]
 
@@ -44,6 +45,12 @@ public final class MonitorEngine {
     public func stop() {
         timer?.cancel()
         timer = nil
+        for task in activeSingleSyncTasks.values {
+            task.cancel()
+        }
+        activeSingleSyncTasks.removeAll()
+        errorsByMonitorId.removeAll()
+        isSyncing = false
     }
 
     public func syncAll() async {
@@ -53,12 +60,24 @@ public final class MonitorEngine {
 
         let activeMonitors = store.monitors.filter(\.isEnabled)
         for monitor in activeMonitors {
-            await sync(monitor: monitor)
+            guard !Task.isCancelled, session.isAuthenticated else { break }
+            await performSync(monitor: monitor)
         }
     }
 
     public func sync(monitor: MonitorDefinition) async {
-        guard session.isAuthenticated, let source = makeSource(for: monitor.target) else { return }
+        activeSingleSyncTasks[monitor.id]?.cancel()
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.activeSingleSyncTasks.removeValue(forKey: monitor.id) }
+            await self.performSync(monitor: monitor)
+        }
+        activeSingleSyncTasks[monitor.id] = task
+        await task.value
+    }
+
+    private func performSync(monitor: MonitorDefinition) async {
+        guard !Task.isCancelled, session.isAuthenticated, let source = makeSource(for: monitor.target) else { return }
 
         let cursor = store.cursors[monitor.id]
         let isFirstSync = (cursor == nil)
@@ -69,6 +88,8 @@ public final class MonitorEngine {
                 cursor: cursor,
                 session: session
             )
+            guard !Task.isCancelled, session.isAuthenticated else { return }
+
             store.repairEvents(using: fetchedEvents)
             store.recordSync(forMonitorId: monitor.id)
             errorsByMonitorId.removeValue(forKey: monitor.id)
@@ -83,11 +104,13 @@ public final class MonitorEngine {
                 store.addEvents(events)
                 if let notificationManager {
                     for event in events {
+                        guard !Task.isCancelled, session.isAuthenticated else { return }
                         await notificationManager.sendMonitorNotification(for: event)
                     }
                 }
             }
         } catch {
+            guard !Task.isCancelled, session.isAuthenticated, !(error is CancellationError) else { return }
             let description = error.localizedDescription
             errorsByMonitorId[monitor.id] = description
             logger.error("Failed to sync monitor \(monitor.displayName, privacy: .public): \(description, privacy: .public)")

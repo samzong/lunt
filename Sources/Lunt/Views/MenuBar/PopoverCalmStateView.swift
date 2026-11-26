@@ -128,10 +128,13 @@ extension PopoverFeedProjection {
         from activityService: ActivityService,
         workType: WorkItemTypeFilter
     ) -> [ActivityFilter: Int] {
-        Dictionary(uniqueKeysWithValues: ActivityFilter.allCases.map { role in
-            let filtered = filterByWorkType(activityService.items(for: role), workType: workType)
-            return (role, filtered.count)
-        })
+        Dictionary(
+            ActivityFilter.allCases.map { role in
+                let filtered = filterByWorkType(activityService.items(for: role), workType: workType)
+                return (role, filtered.count)
+            },
+            uniquingKeysWith: { _, latest in latest }
+        )
     }
 
     static func pinnedSearchCounts(
@@ -139,13 +142,16 @@ extension PopoverFeedProjection {
         pinnedSearches: [SavedSearch],
         workType: WorkItemTypeFilter
     ) -> [UUID: Int] {
-        Dictionary(uniqueKeysWithValues: pinnedSearches.map { search in
-            let filtered = filterByWorkType(
-                searchService.resultsBySearchId[search.id] ?? [],
-                workType: workType
-            )
-            return (search.id, filtered.count)
-        })
+        Dictionary(
+            pinnedSearches.map { search in
+                let filtered = filterByWorkType(
+                    searchService.resultsBySearchId[search.id] ?? [],
+                    workType: workType
+                )
+                return (search.id, filtered.count)
+            },
+            uniquingKeysWith: { _, latest in latest }
+        )
     }
 
     static func lastSyncedAt(for context: PopoverFeedContext) -> Date? {

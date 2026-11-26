@@ -25,6 +25,7 @@ public class SearchService {
 
     @ObservationIgnored private nonisolated(unsafe) var autoRefreshTask: Task<Void, Never>?
     @ObservationIgnored private nonisolated(unsafe) var activeFetchTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var activeSingleSyncTasks: [UUID: Task<Void, Never>] = [:]
 
     private var knownMatchIdsKey: String {
         "\(storageKey).knownMatchIds"
@@ -44,6 +45,9 @@ public class SearchService {
     deinit {
         autoRefreshTask?.cancel()
         activeFetchTask?.cancel()
+        for task in activeSingleSyncTasks.values {
+            task.cancel()
+        }
     }
 
     public func configure(interval: TimeInterval? = nil) {
@@ -64,6 +68,10 @@ public class SearchService {
         stopAutoRefresh()
         activeFetchTask?.cancel()
         activeFetchTask = nil
+        for task in activeSingleSyncTasks.values {
+            task.cancel()
+        }
+        activeSingleSyncTasks.removeAll()
         items = []
         resultsBySearchId = [:]
         errorsBySearchId = [:]
@@ -145,6 +153,9 @@ public class SearchService {
 
     public func updateSearch(id: UUID, options: UpdateOptions) {
         guard let index = savedSearches.firstIndex(where: { $0.id == id }) else { return }
+        let previousQuery = savedSearches[index].query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previousType = savedSearches[index].type
+
         if let name = options.name {
             savedSearches[index].name = name
         }
@@ -160,6 +171,11 @@ public class SearchService {
         if let type = options.type {
             savedSearches[index].type = type
         }
+
+        let updatedQuery = savedSearches[index].query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let updatedType = savedSearches[index].type
+        let definitionChanged = updatedQuery != previousQuery || updatedType != previousType
+
         if let watchAlerts = options.watchAlerts {
             savedSearches[index].watchAlerts = watchAlerts
             if !watchAlerts {
@@ -167,6 +183,16 @@ public class SearchService {
                 saveKnownMatchIds()
             }
         }
+
+        if definitionChanged {
+            knownMatchIdsBySearchId.removeValue(forKey: id)
+            saveKnownMatchIds()
+            errorsBySearchId.removeValue(forKey: id)
+            resultsBySearchId.removeValue(forKey: id)
+            monitorStore?.clearEvents(forMonitorId: id)
+            aggregateResults()
+        }
+
         saveToStorage()
     }
 
@@ -204,6 +230,17 @@ public class SearchService {
     }
 
     public func syncSearch(id: UUID) async {
+        activeSingleSyncTasks[id]?.cancel()
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.activeSingleSyncTasks.removeValue(forKey: id) }
+            await self.performSyncSearch(id: id)
+        }
+        activeSingleSyncTasks[id] = task
+        await task.value
+    }
+
+    private func performSyncSearch(id: UUID) async {
         guard let search = savedSearches.first(where: { $0.id == id }) else { return }
         guard let graphqlClient = session.graphqlClient else {
             errorMessage = "Not authenticated"
@@ -224,10 +261,12 @@ public class SearchService {
             if search.watchAlerts {
                 await processWatchAlerts(for: search, results: results)
             }
+            guard !Task.isCancelled, session.isAuthenticated else { return }
             aggregateResults()
             lastSyncedAt = Date()
             errorMessage = nil
         } catch {
+            guard !Task.isCancelled, session.isAuthenticated, !(error is CancellationError) else { return }
             let description = error.localizedDescription
             logger.error("Failed to fetch search \(search.name, privacy: .public): \(description, privacy: .public)")
             errorsBySearchId[search.id] = description
@@ -249,7 +288,7 @@ public class SearchService {
         var firstError: String?
 
         for search in enabledSearches {
-            guard !Task.isCancelled else { break }
+            guard !Task.isCancelled, session.isAuthenticated else { break }
             do {
                 let results = try await graphqlClient.search(
                     query: effectiveQuery(query: search.query, type: search.type),
@@ -261,8 +300,10 @@ public class SearchService {
                 if search.watchAlerts {
                     await processWatchAlerts(for: search, results: results)
                 }
+                guard !Task.isCancelled, session.isAuthenticated else { break }
                 succeededCount += 1
             } catch {
+                guard !Task.isCancelled, session.isAuthenticated, !(error is CancellationError) else { break }
                 let description = error.localizedDescription
                 logger.error("Failed to fetch search \(search.name, privacy: .public): \(description, privacy: .public)")
                 errorsBySearchId[search.id] = description
@@ -327,6 +368,7 @@ public class SearchService {
         monitorStore?.addEvents(newEvents)
         if let notificationManager {
             for event in newEvents {
+                guard !Task.isCancelled, session.isAuthenticated else { return }
                 await notificationManager.sendMonitorNotification(for: event)
             }
         }
@@ -413,10 +455,13 @@ public class SearchService {
 
         if let data = defaults.data(forKey: knownMatchIdsKey),
            let decoded = try? JSONDecoder().decode([String: [String]].self, from: data) {
-            knownMatchIdsBySearchId = Dictionary(uniqueKeysWithValues: decoded.compactMap { entry in
-                guard let uuid = UUID(uuidString: entry.key) else { return nil }
-                return (uuid, Set(entry.value))
-            })
+            knownMatchIdsBySearchId = Dictionary(
+                decoded.compactMap { entry in
+                    guard let uuid = UUID(uuidString: entry.key) else { return nil }
+                    return (uuid, Set(entry.value))
+                },
+                uniquingKeysWith: { _, latest in latest }
+            )
         }
     }
 

@@ -162,6 +162,90 @@ final class WatchAlertMigrationTests: XCTestCase {
         XCTAssertTrue(store.events.isEmpty)
     }
 
+    @MainActor
+    func testUpdatingWatchedSearchQueryResetsBaselineAndClearsStaleAlerts() async throws {
+        let suite = "WatchAlertMigrationTests.QueryChange.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let session = GitHubSession()
+        session.configure(token: "test-token", urlSession: MigrationMockURLProtocol.makeSession())
+
+        let store = MonitorStore(defaults: defaults)
+        let service = SearchService(session: session, defaults: defaults, storageKey: "savedSearches")
+        service.monitorStore = store
+
+        service.addSearch(name: "Watch PRs", query: "repo:samzong/lunt", type: .pr, watchAlerts: true)
+        let search = try XCTUnwrap(service.savedSearches.first)
+
+        MigrationMockURLProtocol.setHandler { request in
+            let json = Self.searchGraphQLResponse(nodes: [("node-1", 1, "First", "2026-05-20T10:00:00Z")])
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(json.utf8))
+        }
+        await service.fetchAll()
+
+        MigrationMockURLProtocol.setHandler { request in
+            let json = Self.searchGraphQLResponse(nodes: [("node-2", 2, "Second", "2026-05-20T11:00:00Z")])
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(json.utf8))
+        }
+        await service.syncSearch(id: search.id)
+        XCTAssertEqual(store.events.count, 1)
+
+        service.updateSearch(id: search.id, options: .init(query: "repo:samzong/combe"))
+        XCTAssertTrue(store.events.isEmpty)
+
+        MigrationMockURLProtocol.setHandler { request in
+            let json = Self.searchGraphQLResponse(nodes: [("node-99", 99, "Baseline Only", "2026-05-20T12:00:00Z")])
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(json.utf8))
+        }
+        await service.syncSearch(id: search.id)
+        XCTAssertTrue(store.events.isEmpty)
+    }
+
+    @MainActor
+    func testSecurityHardeningURLValidationTargetParsingAndDuplicateUUIDStorage() throws {
+        XCTAssertNil(URL.validatedGitHubWebURL(from: "file:///etc/passwd"))
+        XCTAssertNil(URL.validatedGitHubWebURL(from: "vscode://file/tmp/a"))
+        XCTAssertNil(URL.validatedGitHubWebURL(from: "https://github.com.evil.com/org/repo"))
+        XCTAssertEqual(
+            URL.validatedGitHubWebURL(from: "https://github.com/samzong/lunt/pull/48")?.absoluteString,
+            "https://github.com/samzong/lunt/pull/48"
+        )
+        XCTAssertEqual(
+            URL.validatedGitHubAPISubjectWebURL(from: "https://api.github.com/repos/samzong/lunt/pulls/48")?.absoluteString,
+            "https://github.com/samzong/lunt/pull/48"
+        )
+
+        XCTAssertNil(MonitorTarget.parse(input: "https://github.com.evil.com/samzong/lunt", type: "repository"))
+        XCTAssertNil(MonitorTarget.parse(input: "../etc/passwd", type: "account"))
+        XCTAssertNil(MonitorTarget.parse(input: "samzong/../other", type: "repository"))
+        XCTAssertEqual(
+            MonitorTarget.parse(input: "https://github.com/samzong/lunt", type: "repository"),
+            .repository(owner: "samzong", name: "lunt")
+        )
+
+        let suite = "WatchAlertMigrationTests.DupUUID.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let lower = UUID().uuidString.lowercased()
+        let upper = lower.uppercased()
+        defaults.set(Data(#"{"\#(lower)":"c1","\#(upper)":"c2"}"#.utf8), forKey: "monitor_cursors")
+        defaults.set(Data(#"{"\#(lower)":100,"\#(upper)":200}"#.utf8), forKey: "monitor_last_synced_at")
+        defaults.set(Data(#"{"\#(lower)":["n1"],"\#(upper)":["n2"]}"#.utf8), forKey: "savedSearches.knownMatchIds")
+
+        let store = MonitorStore(defaults: defaults)
+        let service = SearchService(session: GitHubSession(), defaults: defaults, storageKey: "savedSearches")
+        XCTAssertEqual(store.cursors.count, 1)
+        XCTAssertEqual(store.lastSyncedAt.count, 1)
+        XCTAssertTrue(service.savedSearches.isEmpty)
+    }
+
     private static func searchGraphQLResponse(nodes: [(String, Int, String, String)]) -> String {
         let items = nodes.map { id, number, title, updatedAt in
             #"{"__typename":"PullRequest","id":"\#(id)","number":\#(number),"title":"\#(title)","state":"OPEN","repository":{"owner":{"login":"samzong"},"name":"lunt"},"author":{"login":"samzong","avatarUrl":"https://example.com/a.png"},"updatedAt":"\#(updatedAt)"}"#
