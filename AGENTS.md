@@ -31,6 +31,17 @@ follow the code/config first and update docs separately when asked.
   - `Tests/LuntTests/**` for tests.
   - `Scripts/**` and `Makefile` for local build, packaging, and release automation.
   - `.github/workflows/**` for release, CI, and docs automation.
+  - `prototype/**` for the interactive HTML prototype managed with Blueprint.
+
+## Prototype Workflow
+
+`prototype/` holds the interactive HTML reference for the menu bar popover, the workspace window, and the `Settings` window. When a requirement, visible feature, layout, or interaction changes, update `prototype/` before you change Swift code:
+
+1. Update the affected states and copy in `prototype/` first.
+2. Run `blueprint check prototype` from the repository root.
+3. Preview `prototype/` with `blueprint preview prototype` in light and dark modes for owner approval before native implementation.
+4. Commit the `prototype/` updates together with the native implementation in the same pull request.
+5. Do not leave prototype files under `.local/` or replace `prototype/` with a scratch mockup.
 
 ## Codex Plugin Routing
 

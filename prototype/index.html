@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lunt: Interface Design</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="windows.css">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="top-note">
+      <div class="note-brand">
+        <h1>Lunt</h1>
+        <p class="note-sub">Menu bar interface prototype</p>
+      </div>
+      <div class="preview-tools">
+        <div class="pill-track" role="group" aria-label="Surface">
+          <button type="button" class="pill-seg" data-surface="popover" aria-pressed="true">Popover</button>
+          <button type="button" class="pill-seg" data-surface="workspace" aria-pressed="false">Workspace</button>
+          <button type="button" class="pill-seg" data-surface="settings" aria-pressed="false">Settings</button>
+        </div>
+        <div class="pill-track" role="group" aria-label="Scenario">
+          <button type="button" class="pill-seg" data-scene="live" aria-pressed="true">Live</button>
+          <button type="button" class="pill-seg" data-scene="empty" aria-pressed="false">Empty</button>
+          <button type="button" class="pill-seg" data-scene="oauth" aria-pressed="false">OAuth</button>
+          <button type="button" class="pill-seg" data-scene="error" aria-pressed="false">Error</button>
+        </div>
+        <button type="button" class="pill-btn" id="btn-sim-event">+ Event</button>
+        <button type="button" class="pill-btn" id="btn-toggle-spacing" aria-pressed="false">Spacing</button>
+        <div class="pill-track" role="group" aria-label="Theme mode">
+          <button type="button" class="pill-seg" data-theme-mode="system" aria-pressed="true">System</button>
+          <button type="button" class="pill-seg" data-theme-mode="light" aria-pressed="false">Light</button>
+          <button type="button" class="pill-seg" data-theme-mode="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+    </header>
+
+    <section id="spacing-toolbar" class="spacing-toolbar" aria-label="Geometry filter" hidden>
+      <div class="pill-track" role="group" aria-label="Spacing area">
+        <button type="button" class="pill-seg" data-spacing-area="all" aria-pressed="true">All areas</button>
+        <button type="button" class="pill-seg" data-spacing-area="popover" aria-pressed="false">Popover chrome</button>
+        <button type="button" class="pill-seg" data-spacing-area="rows" aria-pressed="false">Unified rows</button>
+        <button type="button" class="pill-seg" data-spacing-area="window" aria-pressed="false">Windows</button>
+      </div>
+      <span id="spacing-readout" class="spacing-readout"></span>
+    </section>
+
+    <section id="desktop-stage" class="desktop-stage" aria-label="macOS interactive stage">
+      <div id="macos-menubar" class="macos-menubar" role="region" aria-label="Simulated macOS menu bar">
+        <div class="menubar-left">
+          <span id="menubar-app-name" class="menubar-app">Xcode</span>
+          <span class="menubar-menu-item">File</span>
+          <span class="menubar-menu-item">Edit</span>
+          <span class="menubar-menu-item">View</span>
+          <span class="menubar-menu-item">Window</span>
+        </div>
+        <div class="menubar-right">
+          <button type="button" id="status-item" class="status-item" aria-expanded="true" aria-label="Lunt menu bar"></button>
+          <span class="menubar-menu-item">Wed Nov 25 9:41 AM</span>
+        </div>
+      </div>
+
+      <div id="stage-banner" class="banner-toast" role="status" aria-live="polite" hidden></div>
+
+      <div id="popover-wrap" class="popover-wrap">
+        <div id="surface-popover" class="popover" role="region" aria-label="Lunt menu bar popover">
+          <div id="popover-header" class="popover-header">
+            <div id="main-tabs" class="nav-platter" role="tablist" aria-label="Primary sections"></div>
+            <div class="header-tools">
+              <button type="button" id="btn-quick-filter" class="icon-btn" title="Quick filter (/)" aria-label="Quick filter" aria-pressed="false">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 4h11.6M4.4 8h7.2M6.6 12h2.8"/></svg>
+              </button>
+              <button type="button" id="btn-sync" class="icon-btn" title="Sync now (⌘R)" aria-label="Sync now">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 5.8A5.4 5.4 0 0 0 3.4 4.9M2.8 10.2a5.4 5.4 0 0 0 9.8.9"/><path d="M3.2 2.6v2.6h2.6M12.8 13.4v-2.6h-2.6"/></svg>
+              </button>
+              <button type="button" id="btn-open-settings" class="icon-btn" title="Settings" aria-label="Open settings">
+                <svg class="oct" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.218c-.428.609-1.176.806-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.212.224l-.288 1.107c-.17.645-.716 1.195-1.459 1.259A8.006 8.006 0 0 1 7.299 16c-.743-.064-1.289-.614-1.459-1.259l-.288-1.107c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.364-1.891l.814-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.038-.246-.088-.294l-.814-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.218c.428-.609 1.176-.806 1.82-.63l1.103.303c.066.019.176.011.299-.071.214-.143.437-.272.668-.386.133-.066.194-.158.212-.224L5.84 1.29C6.01.645 6.556.095 7.299.031A8.2 8.2 0 0 1 8 0Zm0 1.5a6.7 6.7 0 0 0-.568.025c-.085.007-.175.05-.195.125l-.289 1.107c-.147.56-.55.995-1.045 1.244-.185.092-.361.194-.53.307-.473.315-1.073.417-1.622.266l-1.103-.303c-.075-.02-.175.007-.225.078-.216.308-.403.633-.561.972-.036.078-.011.175.049.234l.815.806c.414.409.591 1.005.554 1.584a4.7 4.7 0 0 0 0 .602c.037.579-.14 1.175-.554 1.584l-.815.806c-.06.059-.085.156-.049.234.158.339.345.664.561.972.05.071.15.098.225.078l1.103-.303c.549-.151 1.149-.049 1.622.266.169.113.345.215.53.307.495.249.898.684 1.045 1.244l.289 1.107c.02.075.11.118.195.125a6.7 6.7 0 0 0 1.136 0c.085-.007.175-.05.195-.125l.289-1.107c.147-.56.55-.995 1.045-1.244.185-.092.361-.194.53-.307.473-.315 1.073-.417 1.622-.266l1.103.303c.075.02.175-.007.225-.078.216-.308.403-.633.561-.972.036-.078.011-.175-.049-.234l-.815-.806c-.414-.409-.591-1.005-.554-1.584a4.7 4.7 0 0 0 0-.602c-.037-.579.14-1.175.554-1.584l.815-.806c.06-.059.085-.156.049-.234a6.47 6.47 0 0 0-.561-.972c-.05-.071-.15-.098-.225-.078l-1.103.303c-.549.151-1.149.049-1.622-.266a4.44 4.44 0 0 0-.53-.307c-.495-.249-.898-.684-1.045-1.244l-.289-1.107c-.02-.075-.11-.118-.195-.125A6.7 6.7 0 0 0 8 1.5ZM8 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM7 8a1 1 0 1 0 2 0 1 1 0 0 0-2 0Z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="scope-bar" class="scope-bar">
+            <div id="scope-pills" class="scope-pills" role="group" aria-label="Section scope"></div>
+            <div id="scope-actions" class="scope-actions"></div>
+          </div>
+
+          <div id="filter-drawer" class="filter-drawer" hidden></div>
+
+          <div id="popover-list" class="list-viewport" role="region" aria-label="GitHub items"></div>
+
+          <div id="popover-calm" class="calm-state" hidden></div>
+
+          <footer id="status-strip" class="status-strip" aria-label="Sync status">
+            <div class="status-left">
+              <span id="popover-status-dot" class="live-dot" aria-hidden="true"></span>
+              <span id="popover-status-text">Synced 12s ago · 4 unread</span>
+            </div>
+            <span class="status-shortcuts"><kbd>E</kbd> Read · <kbd>Hold ⌘</kbd> 1-9</span>
+          </footer>
+        </div>
+      </div>
+
+      <div id="surface-workspace" class="app-window" role="region" aria-label="Lunt Workspace window" hidden>
+        <div class="window-chrome">
+          <div class="chrome-left">
+            <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="nav-platter" role="tablist" aria-label="Workspace mode">
+              <button type="button" role="tab" class="nav-seg" data-workspace-mode="monitors" aria-selected="true">Watched Targets</button>
+              <button type="button" role="tab" class="nav-seg" data-workspace-mode="searches" aria-selected="false">Saved Queries</button>
+            </div>
+            <span id="workspace-status" class="window-status" role="status" aria-live="polite" hidden></span>
+          </div>
+          <div class="header-tools">
+            <button type="button" id="btn-workspace-new" class="action-secondary" aria-label="New target">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>
+              <span id="workspace-new-label">New target</span>
+            </button>
+          </div>
+        </div>
+        <div class="window-body">
+          <aside id="workspace-sidebar" class="window-sidebar" aria-label="Targets list"></aside>
+          <div id="workspace-detail" class="window-detail"></div>
+        </div>
+      </div>
+
+      <div id="surface-settings" class="app-window settings-window" role="region" aria-label="Lunt Settings window" hidden>
+        <div class="window-chrome">
+          <div class="chrome-left">
+            <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <h2>Settings</h2>
+            <span id="settings-status" class="window-status" role="status" aria-live="polite" hidden></span>
+          </div>
+        </div>
+        <div class="window-body">
+          <aside id="settings-sidebar" class="window-sidebar" aria-label="Settings sections"></aside>
+          <div id="settings-detail" class="window-detail"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="spacing-inspector" class="inspector-panel" aria-label="Geometry and design contract" hidden>
+      <h2>Geometry and SwiftUI contract</h2>
+      <p class="note-sub">Click an ID to jump to its surface and highlight the live target box. Native coordinates are macOS pt.</p>
+      <div class="table-region">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Relationship</th>
+              <th>Current SwiftUI</th>
+              <th>Live prototype</th>
+              <th>Target contract</th>
+            </tr>
+          </thead>
+          <tbody id="spacing-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="footnote">
+      <span>HTML interaction reference · shared state across Popover, Workspace, and Settings</span>
+      <span><kbd>↑ ↓</kbd> Select · <kbd>E</kbd> Mark read · <kbd>/</kbd> Quick filter · <kbd>⌘ R</kbd> Sync · <kbd>Hold ⌘</kbd> 1-9</span>
+    </footer>
+
+    <details class="contract-notes">
+      <summary>Design rationale and component contract</summary>
+      <div class="contract-grid">
+        <div class="contract-item">
+          <strong>Three-section navigation (Inbox, Work, Watch)</strong>
+          <span>Merges personal activity and pinned saved queries into Work while keeping Inbox for unread notifications and Watch for external changes.</span>
+        </div>
+        <div class="contract-item">
+          <strong>Single query configuration</strong>
+          <span>Each saved query in Workspace can pin to Work and send new matches to Watch without copying query text into a separate monitor.</span>
+        </div>
+        <div class="contract-item">
+          <strong>Unified 12 pt row layout</strong>
+          <span>Removes repository discovery cards and code-search monitors so every list shares one 18 pt Octicon state axis, two-line body, and 58 pt trailing action slot.</span>
+        </div>
+        <div class="contract-item">
+          <strong>Single Workspace window and Apple Silicon target</strong>
+          <span>Combines watched targets and saved queries into one split window with inline delete confirmation, targeting arm64 on macOS 15+.</span>
+        </div>
+      </div>
+    </details>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="state.js"></script>
+  <script src="popover.js"></script>
+  <script src="workspace.js"></script>
+  <script src="settings.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
