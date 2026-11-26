@@ -338,14 +338,83 @@ final class RuleEngineTests: XCTestCase {
         XCTAssertEqual(finalReload.rules.map(\.id), [rule3.id, rule2.id])
     }
 
+    @MainActor
+    func testApplyActiveRulesMarksMatchingNotificationsAndHandlesFailures() async throws {
+        MockURLProtocol.reset()
+        defer { MockURLProtocol.reset() }
+
+        let suiteName = "RuleEngineTests.Apply.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let storage = RuleStorage(defaults: defaults)
+        storage.addRule(
+            makeRule(
+                name: "Auto-read CI",
+                isEnabled: true,
+                conditions: [RuleCondition(field: .reason, operator: .equals, value: "ci_activity")],
+                actions: [RuleAction(type: .markAsRead)]
+            )
+        )
+        storage.addRule(
+            makeRule(
+                name: "Suppress Subscribed Only",
+                isEnabled: true,
+                conditions: [RuleCondition(field: .reason, operator: .equals, value: "subscribed")],
+                actions: [RuleAction(type: .suppressSystemNotification)]
+            )
+        )
+        storage.addRule(
+            makeRule(
+                name: "Disabled Mention Rule",
+                isEnabled: false,
+                conditions: [RuleCondition(field: .reason, operator: .equals, value: "mention")],
+                actions: [RuleAction(type: .markAsRead)]
+            )
+        )
+
+        let session = GitHubSession()
+        session.configure(token: "test-token", urlSession: MockURLProtocol.makeSession())
+
+        let service = NotificationService(session: session)
+        service.ruleStorage = storage
+
+        let ciSuccess = makeNotification(id: "notif-ci-1", owner: "acme", repo: "app", type: "PullRequest", reason: "ci_activity")
+        let ciFailure = makeNotification(id: "notif-ci-fail", owner: "acme", repo: "app", type: "PullRequest", reason: "ci_activity")
+        let subscribed = makeNotification(id: "notif-sub", owner: "acme", repo: "app", type: "Issue", reason: "subscribed")
+        let mention = makeNotification(id: "notif-mention", owner: "acme", repo: "app", type: "Issue", reason: "mention")
+        service.notifications = [ciSuccess, ciFailure, subscribed, mention]
+
+        MockURLProtocol.setHandler { request in
+            let url = try XCTUnwrap(request.url)
+            if url.path.hasSuffix("/notif-ci-fail") {
+                return (HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
+            }
+            return (HTTPURLResponse(url: url, statusCode: 204, httpVersion: nil, headerFields: nil)!, Data())
+        }
+
+        let summary = await service.applyActiveRules()
+        XCTAssertEqual(summary.evaluatedCount, 4)
+        XCTAssertEqual(summary.markedAsReadCount, 1)
+        XCTAssertEqual(summary.failedCount, 1)
+        XCTAssertEqual(service.notifications.map(\.id), ["notif-ci-fail", "notif-sub", "notif-mention"])
+        XCTAssertNotNil(service.errorMessage)
+        XCTAssertEqual(
+            MockURLProtocol.recordedRequests.compactMap { $0.url?.lastPathComponent },
+            ["notif-ci-1", "notif-ci-fail"]
+        )
+    }
+
     private func makeNotification(
+        id: String = "notif_\(UUID().uuidString)",
         owner: String,
         repo: String,
         type: String,
         reason: String
     ) -> GitHubNotification {
         GitHubNotification(
-            id: "notif_\(UUID().uuidString)",
+            id: id,
             unread: true,
             reason: reason,
             updatedAt: Date(timeIntervalSince1970: 1_779_350_000),

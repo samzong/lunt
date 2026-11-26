@@ -4,12 +4,13 @@ import SwiftUI
 
 struct SettingsView: View {
     let updater: SPUUpdater
-    let oauthClientID: String
     @Environment(SettingsNavigationState.self) private var settingsNavigationState
     @Environment(NotificationService.self) private var notificationService
     @Environment(ActivityService.self) private var activityService
     @Environment(SearchService.self) private var searchService
+    @Environment(MonitorStore.self) private var monitorStore
     @Environment(MonitorEngine.self) private var monitorEngine
+    @Environment(DeviceFlowController.self) private var deviceFlowController
     @AppStorage("settings.selectedTab") private var selectedTab: SettingsTab = .general
     @State private var tabSelection = SettingsTabSelection(savedTab: .general)
 
@@ -94,11 +95,17 @@ struct SettingsView: View {
                 .environment(monitorEngine)
 
         case .account:
-            AccountTab(oauthClientID: oauthClientID, settingsWidth: contentWidth)
+            AccountTab(settingsWidth: contentWidth)
                 .environment(notificationService)
+                .environment(activityService)
+                .environment(searchService)
+                .environment(monitorStore)
+                .environment(monitorEngine)
+                .environment(deviceFlowController)
 
         case .rules:
             RulesTab(settingsWidth: contentWidth)
+                .environment(notificationService)
 
         case .about:
             AboutTab(updater: updater, settingsWidth: contentWidth)

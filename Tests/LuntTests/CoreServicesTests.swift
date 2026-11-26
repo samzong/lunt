@@ -338,7 +338,7 @@ private final class LockBox<Value>: @unchecked Sendable {
     }
 }
 
-private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
+final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     typealias Handler = @Sendable (URLRequest) throws -> (HTTPURLResponse, Data)
     private struct State: @unchecked Sendable {
         var handler: Handler?

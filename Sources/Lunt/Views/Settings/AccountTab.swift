@@ -2,44 +2,9 @@ import AppKit
 import LuntCore
 import SwiftUI
 
-// MARK: - Device Flow UI State
-
-private enum DeviceFlowState: Equatable {
-    case idle
-    case requestingCode
-    case showingCode(DeviceCodeResponse, secondsRemaining: Int)
-    case success(username: String)
-    case error(String)
-
-    static func == (lhs: DeviceFlowState, rhs: DeviceFlowState) -> Bool {
-        switch (lhs, rhs) {
-        case (.idle, .idle), (.requestingCode, .requestingCode):
-            true
-        case let (.showingCode(lhsCode, lhsSeconds), .showingCode(rhsCode, rhsSeconds)):
-            lhsCode.userCode == rhsCode.userCode && lhsSeconds == rhsSeconds
-        case let (.success(lhsUser), .success(rhsUser)):
-            lhsUser == rhsUser
-        case let (.error(lhsMsg), .error(rhsMsg)):
-            lhsMsg == rhsMsg
-        default:
-            false
-        }
-    }
-}
-
 struct AccountTab: View {
-    @Environment(GitHubSession.self) private var session
-    @Environment(NotificationService.self) private var notificationService
-    @Environment(ActivityService.self) private var activityService
-    @Environment(SearchService.self) private var searchService
+    @Environment(DeviceFlowController.self) private var deviceFlowController
 
-    @State private var deviceFlowState: DeviceFlowState = .idle
-    @State private var pollingTask: Task<Void, Never>?
-    @State private var countdownTask: Task<Void, Never>?
-
-    private let deviceFlowService = GitHubDeviceFlowService()
-
-    let oauthClientID: String
     let settingsWidth: CGFloat
 
     var body: some View {
@@ -52,27 +17,13 @@ struct AccountTab: View {
         }
         .formStyle(.grouped)
         .frame(width: settingsWidth)
-        .onAppear {
-            Task {
-                if notificationService.isAuthenticated, let user = notificationService.currentUser {
-                    deviceFlowState = .success(username: user.login)
-                } else if notificationService.isAuthenticated {
-                    await notificationService.fetchCurrentUser()
-                    if let user = notificationService.currentUser {
-                        deviceFlowState = .success(username: user.login)
-                    }
-                }
-            }
-        }
-        .onDisappear {
-            cancelPolling()
+        .task {
+            await deviceFlowController.syncAuthenticatedUserIfNeeded()
         }
     }
 
-    // MARK: - Web Auth View
-
     @ViewBuilder private var webAuthView: some View {
-        switch deviceFlowState {
+        switch deviceFlowController.state {
         case .idle:
             webAuthIdleView
         case .requestingCode:
@@ -98,7 +49,7 @@ struct AccountTab: View {
                 .multilineTextAlignment(.center)
 
             Button("account.webauth.signin".localized) {
-                startDeviceFlow()
+                deviceFlowController.startFlow()
             }
             .buttonStyle(.borderedProminent)
         }
@@ -113,6 +64,12 @@ struct AccountTab: View {
             Text("account.webauth.requesting".localized)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            Button("common.cancel".localized) {
+                deviceFlowController.cancelFlow()
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .font(.caption)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
@@ -133,13 +90,12 @@ struct AccountTab: View {
 
             HStack(spacing: 8) {
                 Button("account.webauth.open_browser".localized) {
-                    openVerificationURL(response: response)
+                    deviceFlowController.openVerificationURL(response: response)
                 }
                 .buttonStyle(.borderedProminent)
 
                 Button("account.webauth.copy_code".localized) {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(response.userCode, forType: .string)
+                    deviceFlowController.copyCode(response.userCode)
                 }
                 .buttonStyle(.bordered)
             }
@@ -152,13 +108,17 @@ struct AccountTab: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text(String(format: "account.webauth.expires_in".localized, formatSeconds(secondsRemaining)))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            Text(
+                String(
+                    format: "account.webauth.expires_in".localized,
+                    deviceFlowController.formattedRemainingTime(secondsRemaining)
+                )
+            )
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
 
             Button("common.cancel".localized) {
-                cancelPolling()
-                deviceFlowState = .idle
+                deviceFlowController.cancelFlow()
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
@@ -192,7 +152,7 @@ struct AccountTab: View {
             }
 
             Button("account.webauth.signout".localized) {
-                signOut()
+                deviceFlowController.signOut()
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -212,125 +172,26 @@ struct AccountTab: View {
                 .multilineTextAlignment(.center)
 
             Button("account.webauth.retry".localized) {
-                deviceFlowState = .idle
+                deviceFlowController.resetToIdle()
             }
             .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
     }
-
-    // MARK: - Device Flow Logic
-
-    private func startDeviceFlow() {
-        deviceFlowState = .requestingCode
-
-        pollingTask = Task { @MainActor in
-            do {
-                let codeResponse = try await deviceFlowService.requestDeviceCode(clientId: oauthClientID)
-
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(codeResponse.userCode, forType: .string)
-
-                openVerificationURL(response: codeResponse)
-
-                deviceFlowState = .showingCode(codeResponse, secondsRemaining: codeResponse.expiresIn)
-                startCountdown(expiresIn: codeResponse.expiresIn)
-
-                var interval = codeResponse.interval
-                let clock = ContinuousClock()
-                let deadline = clock.now + .seconds(codeResponse.expiresIn)
-
-                while !Task.isCancelled, clock.now < deadline {
-                    try await Task.sleep(for: .seconds(interval))
-                    guard !Task.isCancelled else { break }
-
-                    let result = try await deviceFlowService.pollForToken(
-                        clientId: oauthClientID,
-                        deviceCode: codeResponse.deviceCode
-                    )
-
-                    switch result {
-                    case let .token(tokenResponse):
-                        await AuthStore.shared.saveToken(tokenResponse.accessToken)
-                        session.configure(token: tokenResponse.accessToken)
-                        notificationService.configure()
-                        searchService.configure()
-                        await notificationService.fetchCurrentUser()
-                        let username = notificationService.currentUser?.login ?? ""
-                        countdownTask?.cancel()
-                        deviceFlowState = .success(username: username)
-                        return
-                    case .pending:
-                        break
-                    case let .slowDown(newInterval):
-                        interval = newInterval
-                    case let .failed(err):
-                        countdownTask?.cancel()
-                        deviceFlowState = .error(err.localizedDescription)
-                        return
-                    }
-                }
-
-                if !Task.isCancelled {
-                    countdownTask?.cancel()
-                    deviceFlowState = .error(DeviceFlowError.expiredToken.localizedDescription)
-                }
-            } catch is CancellationError {
-                // User cancelled
-            } catch {
-                deviceFlowState = .error(DeviceFlowError.networkError(underlying: error).localizedDescription)
-            }
-        }
-    }
-
-    private func startCountdown(expiresIn: Int) {
-        countdownTask?.cancel()
-        countdownTask = Task { @MainActor in
-            var remaining = expiresIn
-            while remaining > 0, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                remaining -= 1
-                if case let .showingCode(resp, _) = deviceFlowState {
-                    deviceFlowState = .showingCode(resp, secondsRemaining: remaining)
-                }
-            }
-        }
-    }
-
-    private func cancelPolling() {
-        pollingTask?.cancel()
-        pollingTask = nil
-        countdownTask?.cancel()
-        countdownTask = nil
-    }
-
-    private func signOut() {
-        cancelPolling()
-        Task {
-            await AuthStore.shared.clearToken()
-        }
-        session.clear()
-        notificationService.clearToken()
-        activityService.clearToken()
-        searchService.clearToken()
-        deviceFlowState = .idle
-    }
-
-    private func openVerificationURL(response: DeviceCodeResponse) {
-        let urlString = response.verificationUriComplete ?? response.verificationUri
-        if let url = URL.validatedGitHubWebURL(from: urlString) {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private func formatSeconds(_ seconds: Int) -> String {
-        let minutes = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", minutes, secs)
-    }
 }
 
 #Preview {
-    AccountTab(oauthClientID: "preview-client-id", settingsWidth: 450)
+    let session = GitHubSession()
+    let store = MonitorStore()
+    let services = DeviceFlowServices(
+        session: session,
+        notificationService: NotificationService(session: session),
+        activityService: ActivityService(session: session),
+        searchService: SearchService(session: session),
+        monitorStore: store,
+        monitorEngine: MonitorEngine(session: session, store: store)
+    )
+    AccountTab(settingsWidth: 450)
+        .environment(DeviceFlowController(oauthClientID: "preview-client-id", services: services))
 }

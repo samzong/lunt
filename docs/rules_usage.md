@@ -116,7 +116,7 @@ If you only care about PRs from `my-company/backend` and `my-company/ios`, you c
 **FAQ**
 
 **Q: Do rules apply to existing notifications?**
-A: No. Rules are applied only when **new** notifications are fetched or refreshed.
+A: Yes, when you run them on demand. Lunt evaluates rules automatically for new notifications during background refresh. You can also click Run Active Rules in Settings > Rules to evaluate current unread notifications immediately.
 
 **Q: I set "Mark as Read", but I still see a red dot?**
 A: Auto-read notifications are removed from the unread count effectively. If you see a count, ensure the rule matched correctly or manually refresh.

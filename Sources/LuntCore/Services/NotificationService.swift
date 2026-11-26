@@ -1,6 +1,18 @@
 import Foundation
 import os
 
+public struct RuleExecutionSummary: Equatable, Sendable {
+    public let evaluatedCount: Int
+    public let markedAsReadCount: Int
+    public let failedCount: Int
+
+    public init(evaluatedCount: Int, markedAsReadCount: Int, failedCount: Int) {
+        self.evaluatedCount = evaluatedCount
+        self.markedAsReadCount = markedAsReadCount
+        self.failedCount = failedCount
+    }
+}
+
 @Observable
 @MainActor
 public class NotificationService {
@@ -273,7 +285,57 @@ public class NotificationService {
         .sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    /// Mark all notifications in a group as read
+    public func applyActiveRules() async -> RuleExecutionSummary {
+        guard session.isAuthenticated, let restClient = session.restClient, let ruleStorage else {
+            return RuleExecutionSummary(evaluatedCount: 0, markedAsReadCount: 0, failedCount: 0)
+        }
+
+        if lastSyncedAt == nil, notifications.isEmpty {
+            await fetchNotifications()
+            guard session.isAuthenticated else {
+                return RuleExecutionSummary(evaluatedCount: 0, markedAsReadCount: 0, failedCount: 0)
+            }
+        }
+
+        let enabledRules = ruleStorage.rules.filter(\.isEnabled)
+        guard !enabledRules.isEmpty else {
+            return RuleExecutionSummary(evaluatedCount: notifications.count, markedAsReadCount: 0, failedCount: 0)
+        }
+
+        let snapshot = notifications
+        var markedIds: Set<String> = []
+        var failedCount = 0
+        var lastError: Error?
+
+        for notification in snapshot {
+            let result = ruleEngine.evaluate(notification: notification, rules: enabledRules)
+            guard result.shouldMarkAsRead else { continue }
+
+            do {
+                try await restClient.markNotificationAsRead(threadId: notification.id)
+                markedIds.insert(notification.id)
+            } catch {
+                failedCount += 1
+                lastError = error
+            }
+        }
+
+        if !markedIds.isEmpty {
+            notifications.removeAll { markedIds.contains($0.id) }
+            pruneStaleCache()
+        }
+
+        if failedCount > 0 {
+            errorMessage = lastError?.localizedDescription
+        }
+
+        return RuleExecutionSummary(
+            evaluatedCount: snapshot.count,
+            markedAsReadCount: markedIds.count,
+            failedCount: failedCount
+        )
+    }
+
     public func markGroupAsRead(_ group: NotificationGroup) async {
         guard let restClient = session.restClient else { return }
 
