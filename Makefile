@@ -5,9 +5,18 @@ EXECUTABLE_NAME := Lunt
 BUILD_DIR := .build
 PROJECT_DIR := $(shell pwd)
 
+RESOLVED_DEVELOPER_DIR := $(shell ./Scripts/resolve_developer_dir.sh)
+ifneq ($(strip $(RESOLVED_DEVELOPER_DIR)),)
+DEVELOPER_DIR := $(RESOLVED_DEVELOPER_DIR)
+export DEVELOPER_DIR
+SWIFT := DEVELOPER_DIR="$(DEVELOPER_DIR)" swift
+else
+SWIFT := swift
+endif
+
 USER_APPLICATIONS := $(HOME)/Applications
 INSTALL_PATH := $(USER_APPLICATIONS)/$(APP_NAME).app
-RELEASE_APP = $(shell swift build -c release --triple $(ARCH)-apple-macosx --show-bin-path)/$(APP_NAME).app
+RELEASE_APP = $(shell $(SWIFT) build -c release --triple $(ARCH)-apple-macosx --show-bin-path)/$(APP_NAME).app
 
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
@@ -42,6 +51,7 @@ version: ## Show version information
 ##@ Build AND RUN
 # ------------------------------------------------------------------------------
 define build_app
+	@xcrun --find actool >/dev/null 2>&1 || { echo "$(RED)❌ Error: Xcode is required to compile Assets.xcassets. Install Xcode or set DEVELOPER_DIR.$(NC)" >&2; exit 1; }
 	@echo "$(BLUE)🔨 Building $(APP_NAME) ($(1), $(ARCH))...$(NC)"
 	swift build -c $(1) --triple $(ARCH)-apple-macosx
 	APP_NAME=$(APP_NAME) EXECUTABLE_NAME=$(EXECUTABLE_NAME) VERSION=$(VERSION) BUILD_NUMBER=$(BUILD_NUMBER) ./Scripts/package_app.sh $(1) $(ARCH)
@@ -51,7 +61,7 @@ endef
 .PHONY: build
 build: ## Build for development (debug, Apple Silicon)
 	$(call build_app,debug)
-	@echo "$(BLUE)📍 Application: $(shell swift build -c debug --triple $(ARCH)-apple-macosx --show-bin-path)/$(APP_NAME).app$(NC)"
+	@echo "$(BLUE)📍 Application: $(shell $(SWIFT) build -c debug --triple $(ARCH)-apple-macosx --show-bin-path)/$(APP_NAME).app$(NC)"
 
 
 .PHONY: run
@@ -63,6 +73,7 @@ run: ## Quick run for development
 # ------------------------------------------------------------------------------
 .PHONY: test
 test: ## Run all Swift tests
+	@xcrun --find actool >/dev/null 2>&1 || { echo "$(RED)❌ Error: Xcode is required to compile Assets.xcassets. Install Xcode or set DEVELOPER_DIR.$(NC)" >&2; exit 1; }
 	swift test
 
 .PHONY: lint
