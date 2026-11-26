@@ -9,8 +9,10 @@ public class RuleStorage {
     private static let storageKey = "notificationRules"
 
     public private(set) var rules: [NotificationRule] = []
+    private let defaults: UserDefaults
 
-    public init() {
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         loadRules()
     }
 
@@ -52,7 +54,7 @@ public class RuleStorage {
     // MARK: - Persistence
 
     private func loadRules() {
-        guard let data = UserDefaults.standard.data(forKey: Self.storageKey) else {
+        guard let data = defaults.data(forKey: Self.storageKey) else {
             return
         }
 
@@ -66,7 +68,7 @@ public class RuleStorage {
     private func saveRules() {
         do {
             let data = try JSONEncoder().encode(rules)
-            UserDefaults.standard.set(data, forKey: Self.storageKey)
+            defaults.set(data, forKey: Self.storageKey)
         } catch {
             print("Failed to encode rules: \(error)")
         }
