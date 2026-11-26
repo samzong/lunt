@@ -1,7 +1,7 @@
 import Foundation
 import Observation
+import os
 
-/// The background scheduler that polls active monitors and triggers notifications.
 @Observable
 @MainActor
 public final class MonitorEngine {
@@ -9,9 +9,11 @@ public final class MonitorEngine {
     private let store: MonitorStore
     private let notificationManager: NotificationManager?
     private let sourceFactory: @MainActor (MonitorTarget) -> MonitorSource?
+    private let logger = Logger(subsystem: "com.samzong.lunt", category: "MonitorEngine")
 
     private var timer: Task<Void, Never>?
     public private(set) var isSyncing = false
+    public private(set) var errorsByMonitorId: [UUID: String] = [:]
 
     public init(
         session: GitHubSession,
@@ -25,7 +27,6 @@ public final class MonitorEngine {
         self.sourceFactory = sourceFactory ?? Self.defaultSource(for:)
     }
 
-    /// Starts background polling with the specified interval.
     public func start(interval: TimeInterval = 300) {
         timer?.cancel()
         timer = Task { [weak self] in
@@ -40,13 +41,11 @@ public final class MonitorEngine {
         }
     }
 
-    /// Stops background polling.
     public func stop() {
         timer?.cancel()
         timer = nil
     }
 
-    /// Forces synchronization of all enabled monitors.
     public func syncAll() async {
         guard session.isAuthenticated, !isSyncing else { return }
         isSyncing = true
@@ -58,7 +57,6 @@ public final class MonitorEngine {
         }
     }
 
-    /// Synchronizes a single monitor.
     public func sync(monitor: MonitorDefinition) async {
         guard session.isAuthenticated, let source = makeSource(for: monitor.target) else { return }
 
@@ -73,14 +71,14 @@ public final class MonitorEngine {
             )
             store.repairEvents(using: fetchedEvents)
             store.recordSync(forMonitorId: monitor.id)
+            errorsByMonitorId.removeValue(forKey: monitor.id)
 
             if let nextCursor {
                 store.saveCursor(nextCursor, forMonitorId: monitor.id)
             }
 
             if isFirstSync {
-                // Baseline-first: initialize checkpoint without triggering notifications
-                print("Baseline initialized for \(monitor.displayName)")
+                logger.info("Baseline initialized for \(monitor.displayName, privacy: .public)")
             } else if !events.isEmpty {
                 store.addEvents(events)
                 if let notificationManager {
@@ -90,7 +88,9 @@ public final class MonitorEngine {
                 }
             }
         } catch {
-            print("Failed to sync monitor \(monitor.displayName): \(error)")
+            let description = error.localizedDescription
+            errorsByMonitorId[monitor.id] = description
+            logger.error("Failed to sync monitor \(monitor.displayName, privacy: .public): \(description, privacy: .public)")
         }
     }
 
@@ -104,10 +104,6 @@ public final class MonitorEngine {
             AccountEventsMonitorSource()
         case .repository:
             RepositoryEventsMonitorSource()
-        case .search:
-            SavedSearchMonitorSource()
-        case .code:
-            CodeKeywordMonitorSource()
         }
     }
 }

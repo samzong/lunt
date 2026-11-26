@@ -1,5 +1,5 @@
-import XCTest
 @testable import Lunt
+import XCTest
 
 final class SettingsNavigationStateTests: XCTestCase {
     func test_pendingTab_changesDisplayedTab_withoutOverwritingSavedTab() {

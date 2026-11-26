@@ -7,62 +7,140 @@ struct HeaderView: View {
 
     @Binding var selectedTab: MenuBarMainTab
     let visibleTabs: [MenuBarMainTab]
-    let unreadCount: Int
+    let inboxUnread: Int
+    let watchUnread: Int
+    let quickFilterOpen: Bool
+    let isSyncing: Bool
     let currentUserLogin: String?
 
+    let onToggleQuickFilter: () -> Void
+    let onSync: () -> Void
+    let onOpenWorkspace: () -> Void
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            tabGroup
+        HStack(spacing: 6) {
+            tabPlatter
 
-            Spacer()
+            Spacer(minLength: 4)
 
-            settingsMenu
+            HStack(spacing: 2) {
+                quickFilterButton
+                syncButton
+                settingsMenu
+            }
         }
-        .frame(height: 52)
-        .padding(.horizontal, 12)
+        .frame(height: 48)
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
+            reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.78),
             value: selectedTab
         )
     }
 
-    @ViewBuilder private var tabGroup: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: 4) {
-                tabs
+    private var tabPlatter: some View {
+        HStack(spacing: 2) {
+            ForEach(visibleTabs, id: \.self) { tab in
+                tabButton(for: tab)
             }
-        } else {
-            tabs
         }
+        .padding(3)
+        .background(Color.primary.opacity(0.05), in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
     }
 
-    private var tabs: some View {
-        HStack(spacing: 3) {
-            ForEach(visibleTabs, id: \.self) { tab in
-                TabButton(
-                    title: tab.titleKey.localized,
-                    icon: tab.iconName,
-                    isSelected: selectedTab == tab,
-                    showDot: tab == .notifications && unreadCount > 0,
-                    namespace: tabAnimation,
-                    action: { switchTab(to: tab) }
-                )
+    private func tabButton(for tab: MenuBarMainTab) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            switchTab(to: tab)
+        } label: {
+            HStack(spacing: 5) {
+                Text(tab.titleKey.localized)
+                    .font(.system(size: 12, weight: .medium))
+
+                if shouldShowDot(for: tab) {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
+                }
             }
+            .foregroundStyle(isSelected ? .primary : .secondary)
+            .frame(height: 28)
+            .padding(.horizontal, 11)
+            .background {
+                if isSelected {
+                    Capsule()
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                        .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+                        .matchedGeometryEffect(id: "activeHeaderTab", in: tabAnimation)
+                }
+            }
+            .contentShape(Capsule())
         }
-        .padding(4)
-        .liquidGlassSurface(cornerRadius: 15, interactive: true)
+        .buttonStyle(.plain)
+    }
+
+    private var quickFilterButton: some View {
+        Button(action: onToggleQuickFilter) {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(quickFilterOpen ? .primary : .secondary)
+                .frame(width: 28, height: 28)
+                .background(
+                    quickFilterOpen ? Color(nsColor: .controlBackgroundColor) : Color.clear,
+                    in: Circle()
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            quickFilterOpen ? Color.primary.opacity(0.14) : Color.clear,
+                            lineWidth: 1
+                        )
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("menubar.quick_filter".localized)
+        .accessibilityLabel(Text("menubar.quick_filter".localized))
+    }
+
+    private var syncButton: some View {
+        Button(action: onSync) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(isSyncing && !reduceMotion ? 360 : 0))
+                .animation(
+                    isSyncing && !reduceMotion
+                        ? .linear(duration: 0.9).repeatForever(autoreverses: false)
+                        : .default,
+                    value: isSyncing
+                )
+                .frame(width: 28, height: 28)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isSyncing)
+        .help("menubar.refresh".localized)
+        .accessibilityLabel(Text("menubar.refresh".localized))
     }
 
     private var settingsMenu: some View {
         Menu {
             if let login = currentUserLogin {
                 Text("settings.user".localized + ": @\(login)")
+                Divider()
             }
 
-            Divider()
+            Button {
+                onOpenWorkspace()
+            } label: {
+                Label("workspace.title".localized, systemImage: "square.grid.2x2")
+            }
 
             Button {
                 onOpenSettings()
@@ -79,11 +157,10 @@ struct HeaderView: View {
             }
         } label: {
             Image(systemName: "gearshape")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 34, height: 32)
-                .liquidGlassSurface(cornerRadius: 11, interactive: true)
-                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(width: 28, height: 28)
+                .contentShape(Circle())
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
@@ -92,12 +169,23 @@ struct HeaderView: View {
         .help("settings.title".localized)
     }
 
+    private func shouldShowDot(for tab: MenuBarMainTab) -> Bool {
+        switch tab {
+        case .inbox:
+            inboxUnread > 0
+        case .work:
+            false
+        case .watch:
+            watchUnread > 0
+        }
+    }
+
     private func switchTab(to tab: MenuBarMainTab) {
         guard selectedTab != tab else { return }
         if reduceMotion {
             selectedTab = tab
         } else {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
                 selectedTab = tab
             }
         }

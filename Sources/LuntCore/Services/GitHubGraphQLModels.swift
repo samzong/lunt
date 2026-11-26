@@ -251,35 +251,6 @@ struct RepositoryOwner: Decodable {
     let login: String
 }
 
-struct RepoSearchData: Decodable {
-    let search: RepoSearchConnection
-}
-
-struct RepoSearchConnection: Decodable {
-    let nodes: [RepoSearchNode]
-}
-
-struct RepoSearchNode: Decodable {
-    let id: String?
-    let name: String?
-    let owner: RepoOwner?
-    let description: String?
-    let stargazerCount: Int?
-    let primaryLanguage: PrimaryLanguage?
-    let createdAt: Date?
-    let updatedAt: Date?
-    let isPrivate: Bool?
-    let isFork: Bool?
-}
-
-struct RepoOwner: Decodable {
-    let login: String
-}
-
-struct PrimaryLanguage: Decodable {
-    let name: String
-}
-
 public enum GraphQLError: Error, LocalizedError, Sendable, Equatable {
     case invalidResponse
     case unauthorized

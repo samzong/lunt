@@ -4,7 +4,6 @@ public enum SearchType: String, Codable, CaseIterable, Sendable, Identifiable {
     case all
     case issue
     case pr
-    case repository
 
     public var id: String {
         rawValue
@@ -15,7 +14,6 @@ public enum SearchType: String, Codable, CaseIterable, Sendable, Identifiable {
         case .all: "magnifyingglass"
         case .issue: "dot.circle"
         case .pr: "arrow.triangle.pull"
-        case .repository: "folder"
         }
     }
 
@@ -24,7 +22,6 @@ public enum SearchType: String, Codable, CaseIterable, Sendable, Identifiable {
         case .all: "All"
         case .issue: "Issues"
         case .pr: "Pull Requests"
-        case .repository: "Repositories"
         }
     }
 }

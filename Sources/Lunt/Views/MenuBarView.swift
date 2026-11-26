@@ -8,393 +8,370 @@ struct MenuBarView: View {
     @Environment(SearchService.self) private var searchService
     @Environment(MonitorStore.self) private var monitorStore
     @Environment(MonitorEngine.self) private var monitorEngine
+    @Environment(WorkspaceNavigationState.self) private var workspaceNavigationState
     @Environment(SettingsNavigationState.self) private var settingsNavigationState
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
-    @AppStorage("menubar.selectedMainTab") private var selectedMainTabRawValue = MenuBarMainTab.activity.rawValue
-    @AppStorage("menubar.selectedSubTab") private var selectedSubTabRawValue = MenuBarSubTab.issues.rawValue
-    @AppStorage("menubar.selectedActivityFilter") private var selectedActivityFilterRawValue = ActivityFilter.all.rawValue
-    @AppStorage("searchList.selectedFilterId") private var selectedSearchFilterIdString: String?
+    @AppStorage("menubar.selectedMainTab") private var selectedMainTabRawValue = MenuBarMainTab.inbox.rawValue
+    @AppStorage("menubar.inboxScope") private var inboxScopeRawValue = InboxScope.all.rawValue
+    @AppStorage("menubar.workTypeFilter") private var workTypeRawValue = WorkItemTypeFilter.all.rawValue
+    @AppStorage(UserPreferences.menubarShowInboxTabKey) private var showInboxTab = true
+    @AppStorage(UserPreferences.menubarShowWorkTabKey) private var showWorkTab = true
+    @AppStorage(UserPreferences.menubarShowWatchTabKey) private var showWatchTab = true
 
+    @State private var workScope: WorkScopeSelection = .role(.all)
+    @State private var watchScope: WatchScopeSelection = .all
+    @State private var quickFilterOpen = false
+    @State private var quickFilterMode: QuickFilterMode = .all
+    @State private var activeRowIndex = 0
+    @State private var isCommandHeld = false
     @State private var isMarkingAsRead = false
-    @State private var visibleMainTabs = MenuBarMainTab.visibleTabs()
+    @State private var popoverNotice: String?
+    @State private var noticeTask: Task<Void, Never>?
+    @State private var popoverWindow: NSWindow?
+    @State private var keyMonitor = PopoverKeyMonitor()
 
-    private var hasToken: Bool {
-        notificationService.isAuthenticated
+    private enum WorkspaceTarget {
+        case monitors
+        case searches
     }
 
-    private var selectedMainTab: MenuBarMainTab {
-        get { MenuBarMainTab(rawValue: selectedMainTabRawValue) ?? .activity }
-        nonmutating set { selectedMainTabRawValue = newValue.rawValue }
-    }
-
-    private var selectedSubTab: MenuBarSubTab {
-        get { MenuBarSubTab(rawValue: selectedSubTabRawValue) ?? .issues }
-        nonmutating set { selectedSubTabRawValue = newValue.rawValue }
-    }
-
-    private var selectedActivityFilter: ActivityFilter {
-        get { ActivityFilter(rawValue: selectedActivityFilterRawValue) ?? .all }
-        nonmutating set { selectedActivityFilterRawValue = newValue.rawValue }
-    }
-
-    private var selectedSearchFilterId: UUID? {
-        get { selectedSearchFilterIdString.flatMap { UUID(uuidString: $0) } }
-        nonmutating set { selectedSearchFilterIdString = newValue?.uuidString }
+    private var visibleTabs: [MenuBarMainTab] {
+        var tabs: [MenuBarMainTab] = []
+        if showInboxTab {
+            tabs.append(.inbox)
+        }
+        if showWorkTab {
+            tabs.append(.work)
+        }
+        if showWatchTab {
+            tabs.append(.watch)
+        }
+        return tabs.isEmpty ? [.inbox] : tabs
     }
 
     private var effectiveMainTab: MenuBarMainTab {
-        if visibleMainTabs.contains(selectedMainTab) {
-            return selectedMainTab
-        }
-        return visibleMainTabs.first ?? .notifications
+        let migrated = MenuBarMainTab.migrating(rawValue: selectedMainTabRawValue)
+        return visibleTabs.contains(migrated) ? migrated : (visibleTabs.first ?? .inbox)
+    }
+
+    private var inboxScope: InboxScope {
+        InboxScope(rawValue: inboxScopeRawValue) ?? .all
+    }
+
+    private var workType: WorkItemTypeFilter {
+        WorkItemTypeFilter(rawValue: workTypeRawValue) ?? .all
+    }
+
+    private var pinnedSearches: [SavedSearch] {
+        searchService.savedSearches.filter { $0.isEnabled && $0.isPinned }
+    }
+
+    private var activeMonitors: [MonitorDefinition] {
+        monitorStore.monitors.filter(\.isEnabled)
+    }
+
+    private var alertSearches: [SavedSearch] {
+        searchService.savedSearches.filter { $0.isEnabled && $0.watchAlerts }
+    }
+
+    private var feedContext: PopoverFeedContext {
+        PopoverFeedContext(
+            tab: effectiveMainTab,
+            inboxScope: inboxScope,
+            workScope: workScope,
+            workType: workType,
+            watchScope: watchScope,
+            quickFilterOpen: quickFilterOpen,
+            quickFilterMode: quickFilterMode,
+            notificationService: notificationService,
+            activityService: activityService,
+            searchService: searchService,
+            monitorStore: monitorStore,
+            pinnedSearches: pinnedSearches,
+            activeMonitors: activeMonitors,
+            alertSearches: alertSearches
+        )
+    }
+
+    private var scopeResetToken: String {
+        "\(inboxScopeRawValue)-\(workScope)-\(workTypeRawValue)-\(watchScope)-\(quickFilterMode)"
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            if hasToken {
+            if notificationService.isAuthenticated {
                 HeaderView(
-                    selectedTab: rawBinding($selectedMainTabRawValue, default: .activity),
-                    visibleTabs: visibleMainTabs,
-                    unreadCount: notificationService.unreadCount,
+                    selectedTab: mainTabBinding,
+                    visibleTabs: visibleTabs,
+                    inboxUnread: notificationService.unreadCount,
+                    watchUnread: watchUnreadCount,
+                    quickFilterOpen: quickFilterOpen,
+                    isSyncing: isCurrentTabSyncing,
                     currentUserLogin: notificationService.currentUser?.login,
+                    onToggleQuickFilter: toggleQuickFilter,
+                    onSync: { Task { await refreshCurrentTab() } },
+                    onOpenWorkspace: { openWorkspace(.monitors) },
                     onOpenSettings: { openSettingsAndActivate() },
                     onQuit: { NSApplication.shared.terminate(nil) }
                 )
 
-                Divider()
-
-                SubTabPickerView(
-                    selectedSubTab: rawBinding($selectedSubTabRawValue, default: .issues),
+                ScopeBarView(
                     mainTab: effectiveMainTab,
-                    allCount: currentAllCount,
-                    issuesCount: currentIssuesCount,
-                    prsCount: currentPrsCount,
-                    isMarkingAsRead: isMarkingAsRead,
-                    isLoading: notificationService.isLoading || activityService.isLoading || searchService.isLoading || monitorEngine
-                        .isSyncing,
-                    pinnedSearches: searchService.savedSearches.filter { $0.isEnabled && $0.isPinned },
-                    selectedSearchId: Binding(
-                        get: { selectedSearchFilterId },
-                        set: { selectedSearchFilterId = $0 }
+                    inboxScope: rawBinding($inboxScopeRawValue, default: .all),
+                    inboxCounts: PopoverFeedProjection.inboxCounts(from: notificationService),
+                    inboxUnread: notificationService.unreadCount,
+                    workScope: $workScope,
+                    workType: rawBinding($workTypeRawValue, default: .all),
+                    workRoleCounts: PopoverFeedProjection.workRoleCounts(from: activityService, workType: workType),
+                    pinnedSearches: pinnedSearches,
+                    pinnedSearchCounts: PopoverFeedProjection.pinnedSearchCounts(
+                        from: searchService,
+                        pinnedSearches: pinnedSearches,
+                        workType: workType
                     ),
-                    onMarkAsRead: markFilteredAsRead,
-                    onRefresh: refreshCurrentTab,
-                    onManage: manageAction
+                    watchScope: $watchScope,
+                    watchUnread: watchUnreadCount,
+                    activeMonitors: activeMonitors,
+                    alertSearches: alertSearches,
+                    isMarkingRead: isMarkingAsRead,
+                    onMarkRead: { Task { await markCurrentTabRead() } },
+                    onManageWork: { openWorkspace(.searches) },
+                    onManageWatch: { openWorkspace(.monitors) }
                 )
 
-                if effectiveMainTab == .activity {
-                    FilterBarView(
-                        selectedFilter: rawBinding($selectedActivityFilterRawValue, default: .all),
-                        filterCounts: filterCounts
-                    )
-                    Divider()
+                if quickFilterOpen {
+                    QuickFilterDrawerView(selectedMode: $quickFilterMode, onClose: closeQuickFilter)
                 }
 
-                Divider()
-
                 contentView
-                    .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
                 WelcomeView(onOpenSettings: { openSettingsAndActivate(tab: .account) })
             }
+
+            StatusStripView(
+                notice: popoverNotice,
+                isSyncing: isCurrentTabSyncing,
+                lastSyncedAt: PopoverFeedProjection.lastSyncedAt(for: feedContext),
+                isAuthenticated: notificationService.isAuthenticated
+            )
         }
-        .frame(width: 380, height: 520)
+        .frame(width: 420, height: 500)
+        .background(PopoverWindowAccessor { window in
+            popoverWindow = window
+            keyMonitor.handler = { handleLocalEvent($0) }
+        })
         .liquidReadableWindowBackground()
         .liquidAutomaticScrollEdgeEffect(for: .top)
         .task {
             normalizeSelectedMainTabIfNeeded()
             clearInitialFocus()
-            await initialLoad()
+            await PopoverFeedProjection.initialLoad(
+                notificationService: notificationService,
+                activityService: activityService,
+                searchService: searchService,
+                monitorStore: monitorStore,
+                monitorEngine: monitorEngine
+            )
         }
-        .onChange(of: selectedMainTab) { _, newTab in
-            guard visibleMainTabs.contains(newTab) else {
-                normalizeSelectedMainTabIfNeeded()
-                return
-            }
-            if newTab == .activity, selectedSubTab == .all {
-                selectedSubTab = .issues
-            }
-            if shouldAutoRefreshOnTabSelect(newTab) {
+        .onAppear {
+            keyMonitor.handler = { handleLocalEvent($0) }
+            keyMonitor.start()
+        }
+        .onDisappear {
+            keyMonitor.stop()
+            isCommandHeld = false
+            noticeTask?.cancel()
+        }
+        .onChange(of: visibleTabs) { _, _ in normalizeSelectedMainTabIfNeeded() }
+        .onChange(of: selectedMainTabRawValue) { _, _ in
+            activeRowIndex = 0
+            if PopoverFeedProjection.shouldAutoRefresh(context: feedContext) {
                 Task { await refreshCurrentTab() }
+            }
+        }
+        .onChange(of: scopeResetToken) { _, _ in activeRowIndex = 0 }
+        .onChange(of: currentRows.map(\.id)) { _, ids in
+            if activeRowIndex >= ids.count {
+                activeRowIndex = max(0, ids.count - 1)
             }
         }
     }
 
     @ViewBuilder private var contentView: some View {
-        switch effectiveMainTab {
-        case .activity:
-            ActivityListView(
-                subTab: selectedSubTab,
-                filter: selectedActivityFilter
-            ) { item in
-                closeMenuBarWindow()
-                openActivityItem(item)
-            }
-            .environment(activityService)
-
-        case .notifications:
-            NotificationListView(subTab: selectedSubTab) { group in
-                closeMenuBarWindow()
-                openNotificationGroup(group)
-            }
-            .environment(notificationService)
-
-        case .search:
-            SearchListView(
-                selectedSearchId: Binding(
-                    get: { selectedSearchFilterId },
-                    set: { selectedSearchFilterId = $0 }
-                )
-            ) { item in
-                closeMenuBarWindow()
-                openActivityItem(item)
-            }
-            .environment(searchService)
-
-        case .watching:
-            if monitorStore.monitors.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "waveform.path.ecg")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.secondary)
-
-                    Text("menubar.watching.empty.title".localized)
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-
-                    Text("menubar.watching.empty.description".localized)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-
-                    Button("monitor.management.title".localized) {
-                        openWindowAndActivate(.monitorManagement)
-                    }
-                    .liquidGlassButtonStyle(prominent: true)
+        let rows = currentRows
+        let errorMessage = PopoverFeedProjection.errorMessage(for: feedContext, monitorEngine: monitorEngine)
+        if isCurrentTabSyncing, rows.isEmpty {
+            calmStateView(.loading)
+        } else if !rows.isEmpty {
+            VStack(spacing: 0) {
+                if let errorMessage {
+                    InlineErrorBanner(message: errorMessage)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List {
-                    if monitorStore.events.isEmpty {
-                        VStack(spacing: 8) {
-                            Image(systemName: "circle.dashed")
-                                .font(.system(size: 32))
-                                .foregroundStyle(.secondary)
-                            Text("monitor.management.events.empty".localized)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(monitorStore.events) { event in
-                            MenuBarEventRow(event: event) {
-                                monitorStore.markEventRead(id: event.id)
-                                if let url = URL(string: event.url) {
-                                    NSWorkspace.shared.open(url)
-                                }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                                UnifiedItemRow(
+                                    model: row,
+                                    isActive: index == activeRowIndex,
+                                    isCommandHeld: isCommandHeld,
+                                    shortcutNumber: index < 9 ? index + 1 : nil,
+                                    onOpen: { openRow(row, at: index) },
+                                    onToggleRead: canToggleRead(row) ? { toggleRead(row) } : nil
+                                )
+                                .id(row.id)
                             }
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                    }
+                    .onChange(of: activeRowIndex) { _, newIndex in
+                        guard rows.indices.contains(newIndex) else { return }
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            proxy.scrollTo(rows[newIndex].id, anchor: .center)
+                        }
                     }
                 }
-                .listStyle(.plain)
             }
+        } else if let errorMessage {
+            calmStateView(.error(errorMessage))
+        } else {
+            calmStateView(
+                .empty(
+                    isWatch: effectiveMainTab == .watch,
+                    isFiltered: quickFilterOpen && quickFilterMode != .all
+                )
+            )
         }
     }
 
-    private var currentAllCount: Int {
+    private func calmStateView(_ mode: PopoverCalmMode) -> some View {
+        PopoverCalmStateView(
+            mode: mode,
+            onRetry: { Task { await refreshCurrentTab() } },
+            onAccountSettings: { openSettingsAndActivate(tab: .account) },
+            onManageWatch: { openWorkspace(.monitors) }
+        )
+    }
+
+    private var currentRows: [UnifiedRowModel] {
+        PopoverFeedProjection.buildRows(from: feedContext)
+    }
+
+    private var watchUnreadCount: Int {
+        PopoverFeedProjection.watchEvents(
+            from: monitorStore.events,
+            scope: .all,
+            activeMonitors: activeMonitors,
+            alertSearches: alertSearches
+        ).count { !$0.isRead }
+    }
+
+    private var isCurrentTabSyncing: Bool {
         switch effectiveMainTab {
-        case .notifications:
-            notificationService.unreadCount
-        case .activity:
-            activityService.items(for: .all).count
-        case .search:
-            searchService.items.count
-        case .watching:
-            monitorStore.events.count
+        case .inbox: notificationService.isLoading
+        case .work: activityService.isLoading || searchService.isLoading
+        case .watch: monitorEngine.isSyncing
+        }
+    }
+}
+
+extension MenuBarView {
+    private func canToggleRead(_ row: UnifiedRowModel) -> Bool {
+        switch row.source {
+        case .notification, .monitorEvent: true
+        case .searchResult: false
         }
     }
 
-    private var currentIssuesCount: Int {
-        switch effectiveMainTab {
-        case .notifications:
-            notificationService.notifications.count { $0.notificationType == .issue }
-        case .activity:
-            activityService.issues(for: .all).count
-        case .search:
-            searchService.items.count(where: { $0.itemType == .issue })
-        case .watching:
-            0
+    private func openRow(_ row: UnifiedRowModel, at index: Int) {
+        activeRowIndex = index
+        if let url = row.url {
+            NSWorkspace.shared.open(url)
         }
+        showNotice(formattedNotice(key: "menubar.status.opened", argument: row.shortLabel))
+        switch row.source {
+        case let .notification(group):
+            Task { await notificationService.markGroupAsRead(group) }
+        case let .monitorEvent(event) where !event.isRead:
+            monitorStore.toggleEventRead(id: event.id)
+        default:
+            break
+        }
+        closeMenuBarWindow()
     }
 
-    private var currentPrsCount: Int {
-        switch effectiveMainTab {
-        case .notifications:
-            notificationService.notifications.count { $0.notificationType == .pullRequest }
-        case .activity:
-            activityService.pullRequests(for: .all).count
-        case .search:
-            searchService.items.count(where: { $0.itemType == .pullRequest })
-        case .watching:
-            0
-        }
-    }
-
-    private var filterCounts: [ActivityFilter: Int] {
-        switch selectedSubTab {
-        case .all:
-            [
-                .all: activityService.items(for: .all).count,
-                .assigned: activityService.items(for: .assigned).count,
-                .created: activityService.items(for: .created).count,
-                .mentioned: activityService.items(for: .mentioned).count,
-                .reviewRequested: activityService.items(for: .reviewRequested).count,
-            ]
-        case .issues:
-            [
-                .created: activityService.issues(for: .created).count,
-                .assigned: activityService.issues(for: .assigned).count,
-                .mentioned: activityService.issues(for: .mentioned).count,
-            ]
-        case .prs:
-            [
-                .created: activityService.pullRequests(for: .created).count,
-                .reviewRequested: activityService.pullRequests(for: .reviewRequested).count,
-                .assigned: activityService.pullRequests(for: .assigned).count,
-                .mentioned: activityService.pullRequests(for: .mentioned).count,
-            ]
+    private func toggleRead(_ row: UnifiedRowModel) {
+        switch row.source {
+        case let .notification(group):
+            Task { await notificationService.markGroupAsRead(group) }
+        case let .monitorEvent(event):
+            monitorStore.toggleEventRead(id: event.id)
+        case .searchResult:
+            showNotice("menubar.status.ready".localized)
         }
     }
 
     @MainActor
-    private func initialLoad() async {
-        if notificationService.currentUser == nil {
-            await notificationService.fetchCurrentUser()
-        }
-        if notificationService.lastSyncedAt == nil {
-            await notificationService.fetchNotifications()
-        }
-        if activityService.lastSyncedAt == nil {
-            await activityService.fetchMyItems()
-        }
-        if searchService.lastSyncedAt == nil {
-            await searchService.fetchAll()
-        }
-        if monitorStore.lastSyncedAt.isEmpty {
-            await monitorEngine.syncAll()
-        }
-    }
+    private func markCurrentTabRead() async {
+        guard !isMarkingAsRead else { return }
+        isMarkingAsRead = true
+        defer { isMarkingAsRead = false }
 
-    private func shouldAutoRefreshOnTabSelect(_ tab: MenuBarMainTab) -> Bool {
-        switch tab {
-        case .notifications:
-            notificationService.lastSyncedAt == nil
-        case .activity:
-            activityService.lastSyncedAt == nil
-        case .search:
-            searchService.lastSyncedAt == nil
-        case .watching:
-            monitorStore.lastSyncedAt.isEmpty
+        if let message = await PopoverFeedProjection.markCurrentTabRead(context: feedContext) {
+            showNotice(message)
         }
     }
 
     @MainActor
     private func refreshCurrentTab() async {
-        switch effectiveMainTab {
-        case .notifications:
-            await notificationService.fetchNotifications()
-        case .activity:
-            switch selectedSubTab {
-            case .all:
-                await activityService.fetchMyItems()
-            case .issues:
-                await activityService.fetchMyItems(type: .issue)
-            case .prs:
-                await activityService.fetchMyItems(type: .pullRequest)
-            }
-        case .search:
-            await searchService.fetchAll()
-        case .watching:
-            await monitorEngine.syncAll()
-        }
+        await PopoverFeedProjection.refresh(context: feedContext, monitorEngine: monitorEngine)
     }
 
     private func normalizeSelectedMainTabIfNeeded() {
-        if !visibleMainTabs.contains(selectedMainTab) {
-            selectedMainTab = visibleMainTabs.first ?? .notifications
-        }
-    }
-
-    @MainActor
-    private func markFilteredAsRead() async {
-        guard !isMarkingAsRead else { return }
-        isMarkingAsRead = true
-        defer { isMarkingAsRead = false }
-
-        if effectiveMainTab == .watching {
-            monitorStore.markAllEventsRead()
-            return
-        }
-
-        let notificationsToMark: [GitHubNotification] = switch selectedSubTab {
-        case .all:
-            notificationService.notifications
-        case .issues:
-            notificationService.notifications.filter { $0.notificationType == .issue }
-        case .prs:
-            notificationService.notifications.filter { $0.notificationType == .pullRequest }
-        }
-
-        for notification in notificationsToMark {
-            await notificationService.markAsRead(notification: notification)
-        }
-    }
-
-    private func openActivityItem(_ item: SearchResultItem) {
-        if let url = item.webURL {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private func openNotificationGroup(_ group: NotificationGroup) {
-        let notification = group.latestNotification
-        if let url = webURL(for: notification) {
-            NSWorkspace.shared.open(url)
-            Task {
-                for notification in group.notifications {
-                    await notificationService.markAsRead(notification: notification)
-                }
+        let migrated = MenuBarMainTab.migrating(rawValue: selectedMainTabRawValue)
+        if visibleTabs.contains(migrated) {
+            if selectedMainTabRawValue != migrated.rawValue {
+                selectedMainTabRawValue = migrated.rawValue
             }
+        } else if let fallback = visibleTabs.first {
+            selectedMainTabRawValue = fallback.rawValue
         }
     }
 
-    private func webURL(for notification: GitHubNotification) -> URL? {
-        if let number = notification.issueOrPRNumber {
-            let baseURL = notification.repository.htmlUrl
-            switch notification.notificationType {
-            case .pullRequest:
-                return URL(string: "\(baseURL)/pull/\(number)")
-            case .issue:
-                return URL(string: "\(baseURL)/issues/\(number)")
-            default:
-                break
-            }
+    private func toggleQuickFilter() {
+        quickFilterOpen.toggle()
+        if !quickFilterOpen {
+            quickFilterMode = .all
         }
+    }
 
-        if let apiURLString = notification.subject.url {
-            return URL(string: apiURLString
-                .replacingOccurrences(of: "api.github.com/repos", with: "github.com")
-                .replacingOccurrences(of: "/pulls/", with: "/pull/")
-            )
+    private func closeQuickFilter() {
+        quickFilterOpen = false
+        quickFilterMode = .all
+    }
+
+    private func showNotice(_ message: String) {
+        popoverNotice = message
+        noticeTask?.cancel()
+        noticeTask = Task {
+            try? await Task.sleep(for: .seconds(2.4))
+            guard !Task.isCancelled else { return }
+            popoverNotice = nil
         }
+    }
 
-        return URL(string: notification.repository.htmlUrl)
+    private func formattedNotice(key: String, argument: String) -> String {
+        let template = key.localized
+        return template.contains("%@") ? String(format: template, argument) : "\(template) \(argument)"
+    }
+
+    private var mainTabBinding: Binding<MenuBarMainTab> {
+        Binding(get: { effectiveMainTab }, set: { selectedMainTabRawValue = $0.rawValue })
     }
 
     private func rawBinding<T: RawRepresentable>(
@@ -407,21 +384,52 @@ struct MenuBarView: View {
         )
     }
 
-    private var manageAction: (() -> Void)? {
-        switch effectiveMainTab {
-        case .search:
-            { openWindowAndActivate(.searchManagement) }
-        case .watching:
-            { openWindowAndActivate(.monitorManagement) }
-        default:
-            nil
+    private func handleLocalEvent(_ event: NSEvent) -> NSEvent? {
+        guard let popoverWindow, popoverWindow.isKeyWindow else {
+            if event.type == .flagsChanged {
+                isCommandHeld = false
+            }
+            return event
         }
+        if event.type == .flagsChanged {
+            isCommandHeld = event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command)
+            return event
+        }
+        guard event.type == .keyDown, !(popoverWindow.firstResponder is NSTextView) else { return event }
+
+        let rows = currentRows
+        guard let action = PopoverKeyMonitor.action(
+            for: event,
+            quickFilterOpen: quickFilterOpen,
+            hasRows: !rows.isEmpty
+        ) else {
+            return event
+        }
+
+        switch action {
+        case .closeQuickFilter:
+            closeQuickFilter()
+        case let .openShortcut(index):
+            guard rows.indices.contains(index) else { return event }
+            openRow(rows[index], at: index)
+        case .refresh:
+            Task { await refreshCurrentTab() }
+        case .toggleQuickFilter:
+            toggleQuickFilter()
+        case let .moveSelection(delta):
+            activeRowIndex = max(0, min(rows.count - 1, activeRowIndex + delta))
+        case .openSelected:
+            guard rows.indices.contains(activeRowIndex) else { return event }
+            openRow(rows[activeRowIndex], at: activeRowIndex)
+        case .toggleReadSelected:
+            guard rows.indices.contains(activeRowIndex) else { return event }
+            toggleRead(rows[activeRowIndex])
+        }
+        return nil
     }
 
     private func clearInitialFocus() {
-        Task { @MainActor in
-            NSApplication.shared.keyWindow?.makeFirstResponder(nil)
-        }
+        Task { @MainActor in NSApplication.shared.keyWindow?.makeFirstResponder(nil) }
     }
 
     private func openSettingsAndActivate(tab: SettingsTab? = nil) {
@@ -431,16 +439,18 @@ struct MenuBarView: View {
         activateApp()
     }
 
-    private func openWindowAndActivate(_ window: WindowIdentifier) {
+    private func openWorkspace(_ target: WorkspaceTarget) {
+        switch target {
+        case .monitors: workspaceNavigationState.open(mode: .monitors)
+        case .searches: workspaceNavigationState.open(mode: .searches)
+        }
         closeMenuBarWindow()
-        openWindow(id: window.rawValue)
+        openWindow(id: WindowIdentifier.workspace.rawValue)
         activateApp()
     }
 
     private func activateApp() {
-        Task { @MainActor in
-            NSApplication.shared.activate(ignoringOtherApps: true)
-        }
+        Task { @MainActor in NSApplication.shared.activate(ignoringOtherApps: true) }
     }
 
     @MainActor

@@ -56,18 +56,34 @@ public class ActivityService {
 
     private let session: GitHubSession
     private let logger = Logger(subsystem: "com.samzong.lunt", category: "ActivityService")
+    @ObservationIgnored private nonisolated(unsafe) var autoRefreshTask: Task<Void, Never>?
     @ObservationIgnored private nonisolated(unsafe) var activeFetchTask: Task<Void, Never>?
     private var activeFetchType: SearchResultItem.ItemType?
+    private var refreshInterval: TimeInterval = 60
 
     public init(session: GitHubSession) {
         self.session = session
     }
 
     deinit {
+        autoRefreshTask?.cancel()
         activeFetchTask?.cancel()
     }
 
+    public func configure(interval: TimeInterval = 60) {
+        refreshInterval = max(1, interval)
+        startAutoRefresh()
+    }
+
+    public func updateRefreshInterval(_ interval: TimeInterval) {
+        refreshInterval = max(1, interval)
+        if autoRefreshTask != nil {
+            startAutoRefresh()
+        }
+    }
+
     public func clearToken() {
+        stopAutoRefresh()
         activeFetchTask?.cancel()
         activeFetchTask = nil
         activeFetchType = nil
@@ -81,6 +97,23 @@ public class ActivityService {
         errorMessage = nil
         lastSyncedAt = nil
         isLoading = false
+    }
+
+    private func startAutoRefresh() {
+        autoRefreshTask?.cancel()
+        let interval = refreshInterval
+        autoRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled else { break }
+                await self?.fetchMyItems()
+            }
+        }
+    }
+
+    private func stopAutoRefresh() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = nil
     }
 
     public func fetchMyItems(type: SearchResultItem.ItemType? = nil) async {
@@ -173,8 +206,6 @@ public class ActivityService {
 
         isLoading = false
     }
-
-    // MARK: - Filtered Accessors
 
     public func items(for filter: ActivityFilter) -> [SearchResultItem] {
         switch filter {
