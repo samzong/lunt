@@ -21,7 +21,7 @@ BUILD_NUMBER ?= $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sour
 
 # Architecture related variables
 ARCHES := x86_64 arm64
-DMG_VOLUME_NAME := "$(APP_NAME)"
+DMG_VOLUME_NAME := $(APP_NAME)
 DMG_LABEL_x86_64 := Intel
 DMG_LABEL_arm64 := Apple Silicon
 

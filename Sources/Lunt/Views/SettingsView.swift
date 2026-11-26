@@ -94,9 +94,6 @@ struct SettingsView: View {
         case .rules:
             RulesTab(settingsWidth: contentWidth)
 
-        case .aiFeatures:
-            AITab(settingsWidth: contentWidth)
-
         case .about:
             AboutTab(updater: updater, settingsWidth: contentWidth)
         }
@@ -121,7 +118,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case general
     case account
     case rules
-    case aiFeatures = "ai"
     case about
 
     var id: String {
@@ -136,8 +132,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
             "settings.tab.account".localized
         case .rules:
             "settings.tab.rules".localized
-        case .aiFeatures:
-            "settings.tab.ai".localized
         case .about:
             "settings.tab.about".localized
         }
@@ -151,8 +145,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
             "person.crop.circle"
         case .rules:
             "slider.horizontal.3"
-        case .aiFeatures:
-            "sparkles"
         case .about:
             "info.circle"
         }

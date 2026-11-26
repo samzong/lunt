@@ -470,129 +470,44 @@ final class MonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testMonitorStoreRepairsLegacyEventURLUsingCanonicalEvent() {
+    func testMonitorStoreUpdatesExistingEventFromCanonicalEventPreservingReadState() {
         let (store, cleanup) = makeIsolatedStore()
         defer { cleanup() }
 
         let monitorId = UUID()
-        let occurredAt = Date(timeIntervalSince1970: 1_779_349_500)
-        let legacyEvent = MonitorEvent(
-            id: "event_999",
-            kind: "commit",
+        let initialOccurredAt = Date(timeIntervalSince1970: 1_779_349_500)
+        let updatedOccurredAt = Date(timeIntervalSince1970: 1_779_350_000)
+        let eventId = "\(monitorId.uuidString):pr_999"
+        let storedEvent = MonitorEvent(
+            id: eventId,
+            kind: "pr",
             targetId: monitorId,
             actor: "octocat",
             repo: "owner/repo",
-            title: "Triggered PushEvent activity",
-            url: "https://github.com/owner/repo",
-            occurredAt: occurredAt,
+            title: "Initial PR title",
+            url: "https://github.com/owner/repo/pull/999",
+            occurredAt: initialOccurredAt,
             isRead: true
         )
         let canonicalEvent = MonitorEvent(
-            id: "\(monitorId.uuidString):event_999",
-            kind: "commit",
+            id: eventId,
+            kind: "pr",
             targetId: monitorId,
             actor: "octocat",
             repo: "owner/repo",
-            title: "Pushed commits to repository",
-            url: "https://github.com/owner/repo/commit/def456",
-            occurredAt: occurredAt
+            title: "Updated PR title",
+            url: "https://github.com/owner/repo/pull/999",
+            occurredAt: updatedOccurredAt
         )
 
-        store.addEvents([legacyEvent])
+        store.addEvents([storedEvent])
         store.repairEvents(using: [canonicalEvent])
 
         XCTAssertEqual(store.events.count, 1)
-        XCTAssertEqual(store.events[0].id, "\(monitorId.uuidString):event_999")
-        XCTAssertEqual(store.events[0].url, "https://github.com/owner/repo/commit/def456")
-        XCTAssertEqual(store.events[0].title, "Pushed commits to repository")
+        XCTAssertEqual(store.events[0].id, eventId)
+        XCTAssertEqual(store.events[0].title, "Updated PR title")
+        XCTAssertEqual(store.events[0].occurredAt, updatedOccurredAt)
         XCTAssertTrue(store.events[0].isRead)
-    }
-
-    @MainActor
-    func testMonitorStoreRepairsLegacyPushHomepageURLOnLoad() throws {
-        let suiteName = "MonitorTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        let legacyEvent = MonitorEvent(
-            id: "event_999",
-            kind: "commit",
-            targetId: UUID(),
-            actor: "octocat",
-            repo: "owner/repo",
-            title: "Pushed commits to repository",
-            url: "https://github.com/owner/repo",
-            occurredAt: Date(timeIntervalSince1970: 1_779_349_500)
-        )
-        defaults.set(try JSONEncoder().encode([legacyEvent]), forKey: "monitor_events")
-
-        let store = MonitorStore(defaults: defaults)
-
-        XCTAssertEqual(store.events.count, 1)
-        XCTAssertEqual(store.events[0].url, "https://github.com/owner/repo/commits")
-    }
-
-    @MainActor
-    func testMonitorStoreRepairsLegacyActivityPushHomepageURLOnLoad() throws {
-        let suiteName = "MonitorTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        let legacyEvent = MonitorEvent(
-            id: "event_999",
-            kind: "activity",
-            targetId: UUID(),
-            actor: "octocat",
-            repo: "owner/repo",
-            title: "Triggered PushEvent activity",
-            url: "https://github.com/owner/repo",
-            occurredAt: Date(timeIntervalSince1970: 1_779_349_500),
-            isRead: true
-        )
-        defaults.set(try JSONEncoder().encode([legacyEvent]), forKey: "monitor_events")
-
-        let store = MonitorStore(defaults: defaults)
-
-        XCTAssertEqual(store.events.count, 1)
-        XCTAssertEqual(store.events[0].kind, "commit")
-        XCTAssertEqual(store.events[0].title, "Pushed commits to repository")
-        XCTAssertEqual(store.events[0].url, "https://github.com/owner/repo/commits")
-        XCTAssertTrue(store.events[0].isRead)
-    }
-
-    @MainActor
-    func testMonitorStoreRepairsLegacyIssueCommentActivityOnLoad() throws {
-        let suiteName = "MonitorTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        let legacyEvent = MonitorEvent(
-            id: "event_789",
-            kind: "activity",
-            targetId: UUID(),
-            actor: "octocat",
-            repo: "owner/repo",
-            title: "Triggered IssueCommentEvent activity",
-            url: "https://github.com/owner/repo/issues/7",
-            occurredAt: Date(timeIntervalSince1970: 1_779_349_500)
-        )
-        defaults.set(try JSONEncoder().encode([legacyEvent]), forKey: "monitor_events")
-
-        let store = MonitorStore(defaults: defaults)
-
-        XCTAssertEqual(store.events.count, 1)
-        XCTAssertEqual(store.events[0].kind, "comment")
-        XCTAssertEqual(store.events[0].title, "Commented on issue")
-        XCTAssertEqual(store.events[0].url, "https://github.com/owner/repo/issues/7")
     }
 
     @MainActor

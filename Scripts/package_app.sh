@@ -46,7 +46,7 @@ if [ -d "${ASSETS_PATH}" ]; then
     if command -v actool &> /dev/null; then
         actool --compile "${BUNDLE}/Contents/Resources" \
                --platform macosx \
-               --minimum-deployment-target 14.0 \
+               --minimum-deployment-target 15.0 \
                --app-icon AppIcon \
                --output-partial-info-plist /dev/null \
                "${ASSETS_PATH}" 2>/dev/null || cp -r "${ASSETS_PATH}" "${BUNDLE}/Contents/Resources/"

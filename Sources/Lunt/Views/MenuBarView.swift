@@ -421,11 +421,9 @@ struct MenuBarView: View {
     }
 
     private func openAuxiliaryWindowAndBringToFront(window: WindowIdentifier) {
-        WindowManager.shared.activeWindow = window
         closeMenuBarWindow()
-        openWindow(id: "auxiliary")
+        openWindow(id: window.rawValue)
 
-        // Activate the app to bring auxiliary window to front
         Task { @MainActor in
             NSApplication.shared.activate(ignoringOtherApps: true)
         }

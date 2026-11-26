@@ -13,7 +13,7 @@ follow the code/config first and update docs separately when asked.
 ## Project Shape
 
 - Product: lightweight macOS 15+ menu bar app for GitHub notifications, issues, pull requests, activities, and saved searches.
-- App model: `LSUIElement` accessory app with a SwiftUI `MenuBarExtra`, a native `Settings` scene, and auxiliary window surfaces for saved-search management.
+- App model: `LSUIElement` accessory app with a SwiftUI `MenuBarExtra`, a native `Settings` scene, and auxiliary `Window` scenes for saved-search and monitor management.
 - Package: Swift tools 6.0, `.macOS(.v15)`, with strict concurrency enabled on the core and app targets.
 - Dependencies: Sparkle for updates, Kingfisher for remote images.
 - Targets:
@@ -66,7 +66,7 @@ Prefer the project Make targets over ad hoc commands:
 - `make format`: format `Sources` with SwiftFormat and `.swiftformat`.
 - `make format-check`: check SwiftFormat formatting without rewriting.
 - `make check`: run `lint-fix`, `lint`, `format`, then `format-check`; this can modify files.
-- `make dmg`: build release DMGs for `x86_64` and `arm64`.
+- `make dmg`: build release DMGs for `x86_64`, `arm64`, and `universal`.
 - `make install`: build release and install to `~/Applications/Lunt.app`.
 - `make clean`: clean SwiftPM and `.build`.
 
@@ -104,7 +104,7 @@ Before using any less common CLI flag, verify it with `--help` or official docum
 
 - Do not commit or push without explicit user approval.
 - Before committing, inspect the staged diff, keep commits focused, and use signed-off commits.
-- Release workflow is tag-driven (`v*`) and builds/signs x86_64 and arm64 DMGs in GitHub Actions.
+- Release workflow is tag-driven (`v*`) and builds/signs `x86_64`, `arm64`, and `universal` DMGs in GitHub Actions.
 - Sparkle release behavior depends on `SUPublicEDKey`, `SPARKLE_ED_KEY`, generated appcast output, and the release workflow.
 - Homebrew updates belong to the centralized `samzong/homebrew-tap` package scan.
 - The `idoc` workflow publishes docs from `main`. Keep README product names aligned with `Lunt`.

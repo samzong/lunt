@@ -1,3 +1,4 @@
+import AppKit
 import LuntCore
 import SwiftUI
 
@@ -156,9 +157,11 @@ struct SearchListView: View {
             message: "search.management.empty.description".localized,
             systemImage: "magnifyingglass"
         ) {
-            Button("Manage Searches") {
-                WindowManager.shared.activeWindow = .searchManagement
-                openWindow(id: "auxiliary")
+            Button("search.list.manage".localized) {
+                openWindow(id: WindowIdentifier.searchManagement.rawValue)
+                Task { @MainActor in
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
@@ -177,7 +180,7 @@ struct SearchListView: View {
     private var loadingView: some View {
         VStack {
             Spacer()
-            ProgressView("Loading searches...")
+            ProgressView("search.list.loading".localized)
             Spacer()
         }
     }

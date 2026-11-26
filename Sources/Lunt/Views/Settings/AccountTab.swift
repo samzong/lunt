@@ -255,7 +255,6 @@ struct AccountTab: View {
                         await AuthStore.shared.saveToken(tokenResponse.accessToken)
                         session.configure(token: tokenResponse.accessToken)
                         notificationService.configure()
-                        activityService.configure()
                         searchService.configure()
                         await notificationService.fetchCurrentUser()
                         let username = notificationService.currentUser?.login ?? ""

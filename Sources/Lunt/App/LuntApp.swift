@@ -66,7 +66,6 @@ struct LuntApp: App {
             if let token = await AuthStore.shared.currentToken() {
                 sessionInstance.configure(token: token)
                 service.configure()
-                itemsService.configure()
                 search.configure()
 
                 await service.fetchCurrentUser()
@@ -119,26 +118,26 @@ struct LuntApp: App {
             .environment(settingsNavigationState)
         }
 
-        WindowGroup("Lunt", id: "auxiliary") {
-            WindowView()
+        Window(WindowIdentifier.searchManagement.title, id: WindowIdentifier.searchManagement.rawValue) {
+            SearchWindowView()
+                .environment(searchService)
+        }
+        .defaultSize(
+            width: WindowIdentifier.searchManagement.defaultSize.width,
+            height: WindowIdentifier.searchManagement.defaultSize.height
+        )
+
+        Window(WindowIdentifier.monitorManagement.title, id: WindowIdentifier.monitorManagement.rawValue) {
+            MonitorWindowView()
                 .environment(session)
                 .environment(searchService)
                 .environment(monitorStore)
                 .environment(monitorEngine)
-                .onOpenURL { url in
-                    // Handle URL opening logic if needed, or rely on WindowManager's state
-                    // The WindowManager.shared.activeWindow might be set by the caller before opening,
-                    // or we can parse the URL here.
-                    if let host = url.host, host == "window" {
-                        let path = url.path.trimmingCharacters(in: .init(charactersIn: "/"))
-                        if let windowId = WindowIdentifier(rawValue: path) {
-                            WindowManager.shared.activeWindow = windowId
-                        }
-                    }
-                }
         }
-        .defaultSize(width: 800, height: 600)
-        .handlesExternalEvents(matching: ["window"])
+        .defaultSize(
+            width: WindowIdentifier.monitorManagement.defaultSize.width,
+            height: WindowIdentifier.monitorManagement.defaultSize.height
+        )
     }
 }
 

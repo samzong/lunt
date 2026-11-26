@@ -7,22 +7,12 @@
 "settings.user" = "用户";
 "settings.tab.about" = "关于";
 "settings.tab.rules" = "规则";
-"settings.tab.ai" = "AI";
-"settings.coming_soon.title" = "即将推出";
-"settings.coming_soon.subtitle" = "此功能正在开发中";
 
 /* About Tab */
 "about.github.repo" = "GitHub 仓库";
 "about.report.issue" = "报告问题";
 "about.version" = "版本:";
 "about.check.update" = "检查更新";
-"about.new.version" = "有新版本可用:";
-"about.download" = "下载";
-"about.license" = "许可证:";
-"about.up.to.date" = "已是最新版本！";
-"about.error.invalid.url" = "无效的 URL";
-"about.error.parse" = "解析响应失败";
-"about.error.network" = "网络错误";
 
 /* General Tab */
 "settings.refresh.title" = "刷新频率:";
@@ -48,21 +38,12 @@
 "settings.notifications.test" = "发送测试通知";
 "settings.notifications.description" = "系统通知仅在后台自动刷新时显示。";
 
-/* Account Tab */
-
 /* Menu Bar View */
-"menubar.title" = "通知";
 "menubar.loading" = "正在加载...";
-"menubar.empty.title" = "没有未读通知";
 "menubar.empty.subtitle" = "全部看完了！";
 "menubar.error.title" = "错误";
-"menubar.retry" = "重试";
-"menubar.mark.all.read" = "全部标为已读";
-"menubar.open.in.browser" = "在浏览器中打开";
 "menubar.refresh" = "刷新";
-"menubar.preferences" = "偏好设置...";
 "menubar.quit" = "退出";
-"menubar.open.github.notifications" = "打开 GitHub 通知";
 "menubar.tab.all" = "All";
 "menubar.tab.issues" = "Issues";
 "menubar.tab.prs" = "PRs";
@@ -78,20 +59,8 @@
 "menubar.filter.assigned" = "指派";
 "menubar.filter.mentioned" = "提及";
 "menubar.filter.review_requested" = "待审";
-"menubar.empty.issues" = "没有未读 Issues";
-"menubar.empty.prs" = "没有未读 PRs";
 "menubar.mark_all_read" = "全部已读";
-"menubar.mark_issues_read" = "Issues 已读";
-"menubar.mark_prs_read" = "PRs 已读";
 "menubar.view_all_on_github" = "在 GitHub 查看全部";
-
-/* Notification Row */
-"notification.mark.as.read" = "标记为已读";
-"notification.hide.preview" = "隐藏预览";
-"notification.show.preview" = "显示预览";
-
-/* Errors */
-"error.token.not.configured" = "GitHub Token 未配置";
 
 /* Time Ago */
 "time.years.ago" = "%d 年前";
@@ -122,17 +91,6 @@
 "notification.reason.subscribed" = "已订阅";
 "notification.reason.team_mention" = "团队被提及";
 
-/* PR States */
-"pr.state.open" = "开放";
-"pr.state.closed" = "关闭";
-"pr.state.merged" = "已合并";
-"pr.state.draft" = "草稿";
-
-/* Issue States */
-"issue.state.open" = "开放";
-"issue.state.closed_completed" = "已关闭（已完成）";
-"issue.state.closed_not_planned" = "已关闭（未计划）";
-
 /* Summary Notification */
 "notification.summary.title" = "更多 GitHub 通知";
 "notification.summary.body" = "您还有 %d 条未读通知";
@@ -146,6 +104,8 @@
 /* Rules Tab */
 "rules.title" = "通知规则";
 "rules.add" = "添加规则";
+"rules.import" = "导入规则...";
+"rules.export" = "导出规则...";
 "rules.empty.title" = "暂无规则";
 "rules.empty.subtitle" = "创建规则来自动过滤和管理通知";
 
@@ -172,6 +132,8 @@
 "search.management.unpin" = "从标签页取消固定";
 "search.management.enable" = "启用";
 "search.management.disable" = "停用";
+"search.list.manage" = "管理搜索";
+"search.list.loading" = "正在加载搜索...";
 "search.list.no_results.title" = "暂无结果";
 "search.list.no_results.description" = "已保存搜索没有返回结果。";
 
@@ -242,7 +204,6 @@
 "monitor.management.add.title" = "添加新监控";
 "monitor.management.add.subtitle" = "选择 GitHub 目标和 Lunt 要追踪的内容。";
 "monitor.management.add.name.placeholder" = "显示名称";
-"monitor.management.add.input.placeholder" = "URL、@用户名、owner/repo 或查询词";
 "monitor.management.add.type.label" = "监控类型";
 "monitor.management.add.target.label" = "目标";
 "monitor.management.add.account.placeholder" = "@用户名或个人主页 URL";
