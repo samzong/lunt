@@ -21,4 +21,5 @@ jobs:
       - run: make lint
       - run: make format-check
       - run: make build
+      - run: make verify-bundle
       - run: make test

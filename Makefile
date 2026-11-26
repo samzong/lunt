@@ -63,6 +63,11 @@ build: ## Build for development (debug, Apple Silicon)
 	$(call build_app,debug)
 	@echo "$(BLUE)📍 Application: $(shell $(SWIFT) build -c debug --triple $(ARCH)-apple-macosx --show-bin-path)/$(APP_NAME).app$(NC)"
 
+.PHONY: verify-bundle
+verify-bundle: ## Verify packaged app bundle and metadata parity
+	python3 ./Scripts/verify_release_artifacts.py --self-test
+	python3 ./Scripts/verify_release_artifacts.py --app "$(shell $(SWIFT) build -c debug --triple $(ARCH)-apple-macosx --show-bin-path)/$(APP_NAME).app"
+
 
 .PHONY: run
 run: ## Quick run for development

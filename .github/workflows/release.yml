@@ -74,11 +74,8 @@ jobs:
           test ! -e ".build/Lunt-${{ env.SEMVER }}-x86_64.dmg"
           test ! -e ".build/Lunt-${{ env.SEMVER }}-universal.dmg"
           hdiutil verify ".build/Lunt-${{ env.SEMVER }}-arm64.dmg"
-          MOUNT_DIR="$(mktemp -d "$RUNNER_TEMP/lunt-dmg.XXXXXX")"
-          trap 'hdiutil detach "$MOUNT_DIR" -quiet || true; rm -rf "$MOUNT_DIR"' EXIT
-          hdiutil attach ".build/Lunt-${{ env.SEMVER }}-arm64.dmg" -nobrowse -readonly -mountpoint "$MOUNT_DIR"
-          test "$(lipo -archs "$MOUNT_DIR/Lunt.app/Contents/MacOS/Lunt")" = "arm64"
-          codesign --verify --deep --strict "$MOUNT_DIR/Lunt.app"
+          python3 ./Scripts/verify_release_artifacts.py --self-test
+          python3 ./Scripts/verify_release_artifacts.py --dmg ".build/Lunt-${{ env.SEMVER }}-arm64.dmg" --tag "${{ env.VERSION }}"
 
       - name: Sign DMG with Sparkle
         env:
@@ -126,6 +123,7 @@ jobs:
           test "$(grep -c '<enclosure' .build/appcast.xml)" -eq 1
           grep -Fq "Lunt-${{ env.SEMVER }}-arm64.dmg" .build/appcast.xml
           ! grep -Eq 'x86_64|universal' .build/appcast.xml
+          python3 ./Scripts/verify_release_artifacts.py --appcast .build/appcast.xml --tag "${{ env.VERSION }}" --dmg ".build/Lunt-${{ env.SEMVER }}-arm64.dmg"
 
       - name: Generate Release Notes
         id: release_notes
