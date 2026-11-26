@@ -27,8 +27,10 @@ class VerificationError(Exception):
     pass
 
 
-def default_runner(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, text=True, capture_output=True, check=False)
+def default_runner(
+    cmd: list[str], env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, text=True, capture_output=True, check=False, env=env)
 
 
 def fail(msg: str) -> None:
@@ -71,7 +73,7 @@ def verify_makefile(
     ):
         fail(f"Makefile must not derive BUILD_NUMBER from git rev-list: {makefile_path}")
     make_dir = str(makefile_path.parent) or "."
-    proc = runner(["make", "-C", make_dir, "version"])
+    proc = runner(["env", "-u", "VERSION", "-u", "BUILD_NUMBER", "make", "-C", make_dir, "version"])
     if proc.returncode != 0:
         fail(f"make version failed ({proc.returncode}): {proc.stderr.strip()}")
     parsed = {}
@@ -286,7 +288,7 @@ def run_self_test() -> None:
         rpath_ok = {"v": True}
 
         def stub_runner(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-            if cmd[0] == "make":
+            if cmd[:6] == ["env", "-u", "VERSION", "-u", "BUILD_NUMBER", "make"]:
                 return default_runner(cmd)
             if cmd[0] == "lipo":
                 return subprocess.CompletedProcess(cmd, 0, "arm64\n", "")
@@ -301,6 +303,12 @@ def run_self_test() -> None:
         valid_app = tmp_root / "valid" / "Lunt.app"
         create_synthetic_app(valid_app, short_ver, build_ver)
         verify_app(valid_app, info_plist, makefile, tag, stub_runner)
+        verify_makefile(
+            makefile,
+            short_ver,
+            build_ver,
+            lambda c: default_runner(c, env={**os.environ, "VERSION": f"v{short_ver}", "BUILD_NUMBER": "999"}),
+        )
 
         valid_appcast = tmp_root / "appcast.xml"
         valid_url = f"https://github.com/samzong/lunt/releases/download/{tag}/Lunt-{short_ver}-arm64.dmg"
