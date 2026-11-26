@@ -1,13 +1,13 @@
 #!/bin/bash
-# Package SPM build output into a macOS .app bundle
-# Usage: ./Scripts/package_app.sh [debug|release] [arch]
-#   config: debug or release (default: release)
-#   arch: x86_64 or arm64 (default: current machine arch)
 
 set -euo pipefail
 
 CONFIG="${1:-release}"
-ARCH="${2:-$(uname -m)}"
+ARCH="${2:-arm64}"
+if [ "${ARCH}" != "arm64" ]; then
+    echo "❌ Error: Lunt supports arm64 (Apple Silicon) only. Received '${ARCH}'." >&2
+    exit 1
+fi
 APP_NAME="${APP_NAME:-Lunt}"
 EXECUTABLE_NAME="${EXECUTABLE_NAME:-Lunt}"
 VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/Lunt/Info.plist)}"
@@ -18,14 +18,17 @@ BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
 
 echo "===> Packaging ${APP_NAME}.app (${CONFIG}, ${ARCH})..."
 
-# Create app bundle structure
 rm -rf "${BUNDLE}"
 mkdir -p "${BUNDLE}/Contents/MacOS"
 mkdir -p "${BUNDLE}/Contents/Resources"
 
-# Copy binary
 if [ -f "${BUILD_DIR}/${EXECUTABLE_NAME}" ]; then
     cp "${BUILD_DIR}/${EXECUTABLE_NAME}" "${BUNDLE}/Contents/MacOS/"
+    EXECUTABLE_ARCHS="$(lipo -archs "${BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}")"
+    if [ "${EXECUTABLE_ARCHS}" != "arm64" ]; then
+        echo "❌ Error: Expected arm64 executable in ${BUNDLE}, found '${EXECUTABLE_ARCHS}'." >&2
+        exit 1
+    fi
 else
     echo "❌ Error: Binary not found at ${BUILD_DIR}/${EXECUTABLE_NAME}"
     echo "   Run 'swift build -c ${CONFIG}' first."

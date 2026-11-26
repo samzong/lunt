@@ -49,4 +49,4 @@
 
 ## Requirements
 
-- macOS 15+
+- macOS 15+ on Apple Silicon (`arm64`)
