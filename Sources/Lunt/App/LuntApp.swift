@@ -11,17 +11,16 @@ struct LuntApp: App {
     @State private var searchService: SearchService
     @State private var ruleStorage = RuleStorage()
     @State private var settingsNavigationState = SettingsNavigationState()
+    @State private var workspaceNavigationState = WorkspaceNavigationState()
     @State private var monitorStore: MonitorStore
     @State private var monitorEngine: MonitorEngine
+    @State private var startupTask: Task<Void, Never>?
     private let appConfiguration: AppConfiguration
-
-    /// Sparkle updater controller for automatic updates
     private let updaterController: SPUStandardUpdaterController
 
     init() {
         appConfiguration = .load()
 
-        // Initialize Sparkle updater
         updaterController = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,
@@ -40,7 +39,6 @@ struct LuntApp: App {
         let search = SearchService(session: sessionInstance)
         _searchService = State(initialValue: search)
 
-        // Create rule storage and inject into notification service
         let storage = RuleStorage()
         _ruleStorage = State(initialValue: storage)
 
@@ -50,32 +48,42 @@ struct LuntApp: App {
         let engine = MonitorEngine(session: sessionInstance, store: store, notificationManager: NotificationManager.shared)
         _monitorEngine = State(initialValue: engine)
 
-        Task { @MainActor in
-            NotificationManager.shared.notificationService = service
-            NotificationManager.shared.monitorStore = store
-            service.ruleStorage = storage
-        }
+        NotificationManager.shared.notificationService = service
+        NotificationManager.shared.monitorStore = store
+        service.ruleStorage = storage
+        search.monitorStore = store
+        search.notificationManager = NotificationManager.shared
+        store.migrateLegacyMonitors(into: search)
+        MenuBarMainTab.migrateLegacyVisibilityKeysIfNeeded()
 
-        if UserDefaults.standard.bool(forKey: "enableSystemNotifications") {
-            Task {
-                await NotificationManager.shared.requestAuthorization()
-            }
-        }
+        let configuredInterval = UserDefaults.standard.double(forKey: UserPreferences.refreshIntervalKey)
+        let interval = configuredInterval > 0 ? configuredInterval : 60
 
-        Task { @MainActor in
+        _startupTask = State(initialValue: Task { @MainActor in
             if let token = await AuthStore.shared.currentToken() {
+                guard !Task.isCancelled else { return }
                 sessionInstance.configure(token: token)
-                service.configure()
+                service.startAutoRefresh(interval: interval)
+                itemsService.configure(interval: interval)
                 search.configure()
+                search.updateRefreshInterval(interval)
 
                 await service.fetchCurrentUser()
+                guard !Task.isCancelled, sessionInstance.isAuthenticated else { return }
                 await service.fetchNotifications()
+                guard !Task.isCancelled, sessionInstance.isAuthenticated else { return }
                 await itemsService.fetchMyItems()
+                guard !Task.isCancelled, sessionInstance.isAuthenticated else { return }
                 await search.fetchAll()
+                guard !Task.isCancelled, sessionInstance.isAuthenticated else { return }
 
-                engine.start()
+                engine.start(interval: interval)
             }
-        }
+
+            if UserDefaults.standard.bool(forKey: "enableSystemNotifications") {
+                _ = await NotificationManager.shared.requestAuthorization()
+            }
+        })
     }
 
     var body: some Scene {
@@ -87,6 +95,7 @@ struct LuntApp: App {
                 .environment(searchService)
                 .environment(monitorStore)
                 .environment(monitorEngine)
+                .environment(workspaceNavigationState)
                 .environment(settingsNavigationState)
         } label: {
             MenuBarLabel(unreadCount: notificationService.unreadCount)
@@ -94,8 +103,11 @@ struct LuntApp: App {
         .menuBarExtraStyle(.window)
         .onChange(of: session.isAuthenticated) { _, isAuthenticated in
             if isAuthenticated {
-                monitorEngine.start()
+                let configured = UserDefaults.standard.double(forKey: UserPreferences.refreshIntervalKey)
+                monitorEngine.start(interval: configured > 0 ? configured : 60)
             } else {
+                startupTask?.cancel()
+                startupTask = nil
                 monitorEngine.stop()
                 monitorStore.clearEvents()
             }
@@ -111,28 +123,21 @@ struct LuntApp: App {
             .environment(activityService)
             .environment(searchService)
             .environment(ruleStorage)
+            .environment(monitorEngine)
             .environment(settingsNavigationState)
         }
 
-        Window(WindowIdentifier.searchManagement.title, id: WindowIdentifier.searchManagement.rawValue) {
-            SearchWindowView()
-                .environment(searchService)
-        }
-        .defaultSize(
-            width: WindowIdentifier.searchManagement.defaultSize.width,
-            height: WindowIdentifier.searchManagement.defaultSize.height
-        )
-
-        Window(WindowIdentifier.monitorManagement.title, id: WindowIdentifier.monitorManagement.rawValue) {
-            MonitorWindowView()
+        Window(WindowIdentifier.workspace.title, id: WindowIdentifier.workspace.rawValue) {
+            WorkspaceWindowView()
                 .environment(session)
                 .environment(searchService)
                 .environment(monitorStore)
                 .environment(monitorEngine)
+                .environment(workspaceNavigationState)
         }
         .defaultSize(
-            width: WindowIdentifier.monitorManagement.defaultSize.width,
-            height: WindowIdentifier.monitorManagement.defaultSize.height
+            width: WindowIdentifier.workspace.defaultSize.width,
+            height: WindowIdentifier.workspace.defaultSize.height
         )
     }
 }

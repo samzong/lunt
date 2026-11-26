@@ -7,11 +7,14 @@ struct SettingsView: View {
     let oauthClientID: String
     @Environment(SettingsNavigationState.self) private var settingsNavigationState
     @Environment(NotificationService.self) private var notificationService
+    @Environment(ActivityService.self) private var activityService
+    @Environment(SearchService.self) private var searchService
+    @Environment(MonitorEngine.self) private var monitorEngine
     @AppStorage("settings.selectedTab") private var selectedTab: SettingsTab = .general
     @State private var tabSelection = SettingsTabSelection(savedTab: .general)
 
     private let settingsWidth: CGFloat = 700
-    private let settingsHeight: CGFloat = 440
+    private let settingsHeight: CGFloat = 468
     private let sidebarWidth: CGFloat = 176
     private let contentWidth: CGFloat = 500
 
@@ -86,6 +89,9 @@ struct SettingsView: View {
         case .general:
             GeneralTab(settingsWidth: contentWidth)
                 .environment(notificationService)
+                .environment(activityService)
+                .environment(searchService)
+                .environment(monitorEngine)
 
         case .account:
             AccountTab(oauthClientID: oauthClientID, settingsWidth: contentWidth)

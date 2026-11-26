@@ -1,15 +1,10 @@
 import Foundation
 
-/// REST API client for GitHub notifications management.
-///
-/// Provides methods for fetching notifications and marking them as read.
-/// For detailed PR/Issue information (CI status, reviews), use GitHubGraphQLClient.
 public final class GitHubAPI: Sendable {
     private let baseURL = "https://api.github.com"
     private let token: String
     private let session: URLSession
 
-    /// Configured JSON decoder for GitHub API responses.
     private var jsonDecoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -31,12 +26,6 @@ public final class GitHubAPI: Sendable {
         }
     }
 
-    // MARK: - Notifications (REST only - not available via GraphQL)
-
-    /// Fetches all notifications for the authenticated user.
-    ///
-    /// - Returns: An array of GitHub notifications
-    /// - Throws: `APIError` if the request fails or response cannot be decoded
     public func fetchNotifications() async throws -> [GitHubNotification] {
         let endpoint = "\(baseURL)/notifications"
         let data = try await makeRequest(endpoint: endpoint)
@@ -44,16 +33,10 @@ public final class GitHubAPI: Sendable {
         return try jsonDecoder.decode([GitHubNotification].self, from: data)
     }
 
-    /// Marks a specific notification thread as read.
-    ///
-    /// - Parameter threadId: The unique identifier of the notification thread
-    /// - Throws: `APIError` if the request fails
     public func markNotificationAsRead(threadId: String) async throws {
         let endpoint = "\(baseURL)/notifications/threads/\(threadId)"
         _ = try await makeRequest(endpoint: endpoint, method: "PATCH")
     }
-
-    // MARK: - Private
 
     private func makeRequest(endpoint: String, method: String = "GET", body: Data? = nil) async throws -> Data {
         guard let url = URL(string: endpoint) else {
@@ -127,7 +110,6 @@ extension HTTPURLResponse {
     }
 }
 
-/// Errors that can occur during GitHub API interactions.
 public enum APIError: Error, LocalizedError {
     case invalidURL
     case invalidResponse
@@ -159,8 +141,6 @@ public enum APIError: Error, LocalizedError {
         }
     }
 }
-
-// MARK: - Monitor Events and Code Search Structures & Methods
 
 public struct GitHubEvent: Codable, Sendable {
     public let id: String
@@ -199,10 +179,18 @@ public struct GitHubEvent: Codable, Sendable {
     }
 
     public struct IssueOrPR: Codable, Sendable {
+        public let number: Int?
         public let title: String
         public let htmlUrl: String
 
+        public init(number: Int? = nil, title: String, htmlUrl: String) {
+            self.number = number
+            self.title = title
+            self.htmlUrl = htmlUrl
+        }
+
         enum CodingKeys: String, CodingKey {
+            case number
             case title
             case htmlUrl = "html_url"
         }
@@ -311,57 +299,23 @@ extension GitHubEvent {
         }
         return "https://github.com/\(repo.name)"
     }
-}
 
-public struct GitHubCodeSearchResult: Codable, Sendable {
-    public let items: [Item]
-
-    public struct Item: Codable, Sendable {
-        public let sha: String
-        public let name: String
-        public let path: String
-        public let htmlUrl: String
-        public let repository: Repository
-
-        enum CodingKeys: String, CodingKey {
-            case sha, name, path
-            case htmlUrl = "html_url"
-            case repository
-        }
-    }
-
-    public struct Repository: Codable, Sendable {
-        public let fullName: String
-
-        enum CodingKeys: String, CodingKey {
-            case fullName = "full_name"
-        }
+    public var monitorNumber: Int? {
+        payload?.issue?.number ?? payload?.pullRequest?.number ?? MonitorEvent.parseNumber(from: monitorURL)
     }
 }
 
 extension GitHubAPI {
-    /// Fetch public events for a specific user.
     public func fetchUserEvents(username: String) async throws -> [GitHubEvent] {
         let endpoint = "\(baseURL)/users/\(username)/events"
         let data = try await makeRequest(endpoint: endpoint)
         return try jsonDecoder.decode([GitHubEvent].self, from: data)
     }
 
-    /// Fetch events for a specific repository.
     public func fetchRepoEvents(owner: String, repo: String) async throws -> [GitHubEvent] {
         let endpoint = "\(baseURL)/repos/\(owner)/\(repo)/events"
         let data = try await makeRequest(endpoint: endpoint)
         return try jsonDecoder.decode([GitHubEvent].self, from: data)
-    }
-
-    /// Search code by query.
-    public func searchCode(query: String) async throws -> GitHubCodeSearchResult {
-        guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            throw APIError.invalidURL
-        }
-        let endpoint = "\(baseURL)/search/code?q=\(encodedQuery)"
-        let data = try await makeRequest(endpoint: endpoint)
-        return try jsonDecoder.decode(GitHubCodeSearchResult.self, from: data)
     }
 
     public func userExists(username: String) async -> Bool {

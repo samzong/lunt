@@ -1,6 +1,5 @@
 import Foundation
 
-/// Stores and manages monitor definitions, sync cursors, and local monitor events.
 @Observable
 @MainActor
 public final class MonitorStore {
@@ -11,6 +10,8 @@ public final class MonitorStore {
 
     private let defaults: UserDefaults
     private let keyPrefix: String
+    private var pendingLegacySearchMonitors: [PendingLegacySearchMonitor] = []
+    private var droppedLegacyMonitorIds: Set<UUID> = []
 
     private var monitorsKey: String {
         "\(keyPrefix)monitor_definitions"
@@ -41,7 +42,6 @@ public final class MonitorStore {
         loadFromStorage()
     }
 
-    /// Adds a new monitor definition.
     @discardableResult
     public func addMonitor(_ definition: MonitorDefinition) -> Bool {
         let targetId = definition.target.idString
@@ -53,7 +53,6 @@ public final class MonitorStore {
         return true
     }
 
-    /// Removes a monitor definition and its associated cursor and events.
     public func removeMonitor(id: UUID) {
         monitors.removeAll { $0.id == id }
         events.removeAll { $0.targetId == id }
@@ -65,7 +64,6 @@ public final class MonitorStore {
         saveLastSyncedAt()
     }
 
-    /// Updates the enabled state of a monitor.
     public func updateMonitor(id: UUID, isEnabled: Bool) {
         if let index = monitors.firstIndex(where: { $0.id == id }) {
             monitors[index].isEnabled = isEnabled
@@ -73,7 +71,6 @@ public final class MonitorStore {
         }
     }
 
-    /// Updates event filters toggle configurations.
     public func updateMonitorToggles(id: UUID, toggles: [String: Bool]) {
         if let index = monitors.firstIndex(where: { $0.id == id }) {
             monitors[index].eventToggles = toggles
@@ -81,7 +78,6 @@ public final class MonitorStore {
         }
     }
 
-    /// Updates editable monitor metadata and clears stale state when the watched target changes.
     @discardableResult
     public func updateMonitorDetails(id: UUID, target: MonitorTarget, name: String?) -> Bool {
         guard let index = monitors.firstIndex(where: { $0.id == id }) else {
@@ -110,19 +106,16 @@ public final class MonitorStore {
         return true
     }
 
-    /// Saves the sync cursor/checkpoint for a given monitor.
     public func saveCursor(_ cursor: String, forMonitorId monitorId: UUID) {
         cursors[monitorId] = cursor
         saveCursors()
     }
 
-    /// Records the time a monitor sync request completed successfully.
     public func recordSync(forMonitorId monitorId: UUID, at date: Date = Date()) {
         lastSyncedAt[monitorId] = date
         saveLastSyncedAt()
     }
 
-    /// Appends new events, filtering duplicates.
     public func addEvents(_ newEvents: [MonitorEvent]) {
         guard !newEvents.isEmpty else { return }
 
@@ -137,7 +130,6 @@ public final class MonitorStore {
 
         if added {
             events.sort { $0.occurredAt > $1.occurredAt }
-            // Cap local inbox history
             if events.count > 500 {
                 events = Array(events.prefix(500))
             }
@@ -171,6 +163,7 @@ public final class MonitorStore {
                 title: canonical.title,
                 url: canonical.url,
                 occurredAt: canonical.occurredAt,
+                number: canonical.number,
                 isRead: event.isRead
             )
             repairedEvents.append(repaired)
@@ -183,7 +176,6 @@ public final class MonitorStore {
         }
     }
 
-    /// Marks an event as read.
     public func markEventRead(id: String) {
         if let index = events.firstIndex(where: { $0.id == id }) {
             events[index].isRead = true
@@ -191,7 +183,25 @@ public final class MonitorStore {
         }
     }
 
-    /// Marks all events as read.
+    public func toggleEventRead(id: String) {
+        if let index = events.firstIndex(where: { $0.id == id }) {
+            events[index].isRead.toggle()
+            saveEvents()
+        }
+    }
+
+    public func markEventsRead(forTargetIds targetIds: Set<UUID>) {
+        guard !targetIds.isEmpty else { return }
+        var changed = false
+        for index in events.indices where targetIds.contains(events[index].targetId) && !events[index].isRead {
+            events[index].isRead = true
+            changed = true
+        }
+        if changed {
+            saveEvents()
+        }
+    }
+
     public func markAllEventsRead() {
         for index in events.indices {
             events[index].isRead = true
@@ -199,19 +209,78 @@ public final class MonitorStore {
         saveEvents()
     }
 
-    /// Clears all events.
     public func clearEvents() {
         events = []
         saveEvents()
     }
 
-    /// Clears events collected for a single monitor.
     public func clearEvents(forMonitorId monitorId: UUID) {
         events.removeAll { $0.targetId == monitorId }
         saveEvents()
     }
 
-    // MARK: - Persistence
+    public func migrateLegacyMonitors(into searchService: SearchService) {
+        guard !pendingLegacySearchMonitors.isEmpty || !droppedLegacyMonitorIds.isEmpty else {
+            return
+        }
+
+        var targetIdMap: [UUID: UUID] = [:]
+        for legacy in pendingLegacySearchMonitors {
+            let searchId = searchService.addOrEnableWatchSearch(
+                name: legacy.name,
+                query: legacy.query,
+                isEnabled: legacy.isEnabled
+            )
+            targetIdMap[legacy.id] = searchId
+        }
+
+        var eventsChanged = false
+        if !droppedLegacyMonitorIds.isEmpty {
+            let originalCount = events.count
+            events.removeAll { droppedLegacyMonitorIds.contains($0.targetId) }
+            if events.count != originalCount {
+                eventsChanged = true
+            }
+        }
+
+        for index in events.indices {
+            if let newTargetId = targetIdMap[events[index].targetId] {
+                let event = events[index]
+                events[index] = MonitorEvent(
+                    id: event.id,
+                    kind: event.kind,
+                    targetId: newTargetId,
+                    actor: event.actor,
+                    repo: event.repo,
+                    title: event.title,
+                    url: event.url,
+                    occurredAt: event.occurredAt,
+                    number: event.number,
+                    isRead: event.isRead
+                )
+                eventsChanged = true
+            }
+        }
+
+        for legacyId in targetIdMap.keys {
+            cursors.removeValue(forKey: legacyId)
+            lastSyncedAt.removeValue(forKey: legacyId)
+        }
+        for droppedId in droppedLegacyMonitorIds {
+            cursors.removeValue(forKey: droppedId)
+            lastSyncedAt.removeValue(forKey: droppedId)
+        }
+
+        saveMonitors()
+        if eventsChanged {
+            saveEvents()
+        }
+        saveCursors()
+        saveLastSyncedAt()
+
+        pendingLegacySearchMonitors = []
+        droppedLegacyMonitorIds = []
+    }
 
     private func saveMonitors() {
         if let data = try? JSONEncoder().encode(monitors) {
@@ -241,29 +310,102 @@ public final class MonitorStore {
 
     private func loadFromStorage() {
         if let data = defaults.data(forKey: monitorsKey),
-           let decoded = try? JSONDecoder().decode([MonitorDefinition].self, from: data) {
-            self.monitors = decoded
+           let decoded = try? JSONDecoder().decode([LossyDecodable<LegacyMonitorDefinition>].self, from: data) {
+            var loadedMonitors: [MonitorDefinition] = []
+            var legacySearches: [PendingLegacySearchMonitor] = []
+            var droppedIds: Set<UUID> = []
+
+            for item in decoded.compactMap(\.value) {
+                switch item.target {
+                case let .account(login):
+                    loadedMonitors.append(MonitorDefinition(
+                        id: item.id,
+                        target: .account(login: login),
+                        name: item.name,
+                        isEnabled: item.isEnabled,
+                        eventToggles: item.eventToggles
+                    ))
+                case let .repository(owner, name):
+                    loadedMonitors.append(MonitorDefinition(
+                        id: item.id,
+                        target: .repository(owner: owner, name: name),
+                        name: item.name,
+                        isEnabled: item.isEnabled,
+                        eventToggles: item.eventToggles
+                    ))
+                case let .search(query, targetName):
+                    let resolvedName = normalizedName(item.name) ?? normalizedName(targetName) ?? query
+                    legacySearches.append(PendingLegacySearchMonitor(
+                        id: item.id,
+                        name: resolvedName,
+                        query: query,
+                        isEnabled: item.isEnabled
+                    ))
+                case .code:
+                    droppedIds.insert(item.id)
+                }
+            }
+
+            monitors = loadedMonitors
+            pendingLegacySearchMonitors = legacySearches
+            droppedLegacyMonitorIds = droppedIds
         }
 
         if let data = defaults.data(forKey: eventsKey),
-           let decoded = try? JSONDecoder().decode([MonitorEvent].self, from: data) {
-            self.events = decoded
+           let decoded = try? JSONDecoder().decode([LossyDecodable<MonitorEvent>].self, from: data) {
+            events = decoded.compactMap(\.value)
         }
 
         if let data = defaults.data(forKey: cursorsKey),
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
-            self.cursors = Dictionary(uniqueKeysWithValues: decoded.compactMap { item in
-                guard let uuid = UUID(uuidString: item.key) else { return nil }
-                return (uuid, item.value)
-            })
+            cursors = Dictionary(
+                decoded.compactMap { item in
+                    guard let uuid = UUID(uuidString: item.key) else { return nil }
+                    return (uuid, item.value)
+                },
+                uniquingKeysWith: { _, latest in latest }
+            )
         }
 
         if let data = defaults.data(forKey: lastSyncedAtKey),
            let decoded = try? JSONDecoder().decode([String: Date].self, from: data) {
-            self.lastSyncedAt = Dictionary(uniqueKeysWithValues: decoded.compactMap { item in
-                guard let uuid = UUID(uuidString: item.key) else { return nil }
-                return (uuid, item.value)
-            })
+            lastSyncedAt = Dictionary(
+                decoded.compactMap { item in
+                    guard let uuid = UUID(uuidString: item.key) else { return nil }
+                    return (uuid, item.value)
+                },
+                uniquingKeysWith: { _, latest in latest }
+            )
         }
+    }
+}
+
+private struct PendingLegacySearchMonitor {
+    let id: UUID
+    let name: String
+    let query: String
+    let isEnabled: Bool
+}
+
+private enum LegacyMonitorTarget: Decodable {
+    case account(login: String)
+    case repository(owner: String, name: String)
+    case search(query: String, name: String)
+    case code(query: String, name: String)
+}
+
+private struct LegacyMonitorDefinition: Decodable {
+    let id: UUID
+    let target: LegacyMonitorTarget
+    let name: String?
+    let isEnabled: Bool
+    let eventToggles: [String: Bool]
+}
+
+private struct LossyDecodable<Element: Decodable>: Decodable {
+    let value: Element?
+
+    init(from decoder: Decoder) throws {
+        value = try? Element(from: decoder)
     }
 }

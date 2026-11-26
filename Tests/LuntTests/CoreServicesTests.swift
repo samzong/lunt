@@ -17,14 +17,17 @@ final class CoreServicesTests: XCTestCase {
         let api = GitHubAPI(token: "test-token", session: MockURLProtocol.makeSession())
         let reset = Int(Date().addingTimeInterval(300).timeIntervalSince1970)
 
+        let hdr403Limit = ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "\(reset)"]
+        let hdr403OK = ["X-RateLimit-Remaining": "4999", "X-RateLimit-Reset": "\(reset)"]
+
         await checkAPIError(api, status: 401) { error in
             guard case .unauthorized = error else { return XCTFail("Expected unauthorized, got \(error)") }
         }
-        await checkAPIError(api, status: 403, headers: ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "\(reset)"]) { error in
+        await checkAPIError(api, status: 403, headers: hdr403Limit) { error in
             guard case let .rateLimited(resetTime) = error else { return XCTFail("Expected rateLimited, got \(error)") }
             XCTAssertNotNil(resetTime)
         }
-        await checkAPIError(api, status: 403, headers: ["X-RateLimit-Remaining": "4999", "X-RateLimit-Reset": "\(reset)"]) { error in
+        await checkAPIError(api, status: 403, headers: hdr403OK) { error in
             guard case .httpError(statusCode: 403) = error else { return XCTFail("Expected httpError(403), got \(error)") }
         }
         await checkAPIError(api, status: 429, headers: ["Retry-After": "120"]) { error in
@@ -45,17 +48,19 @@ final class CoreServicesTests: XCTestCase {
     func testGitHubGraphQLClientErrorMapping() async {
         let client = GitHubGraphQLClient(token: "test-token", session: MockURLProtocol.makeSession())
         let reset = Int(Date().addingTimeInterval(600).timeIntervalSince1970)
+        let hdr403Limit = ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "\(reset)"]
+        let hdr403OK = ["X-RateLimit-Remaining": "4999", "X-RateLimit-Reset": "\(reset)"]
 
         await checkGraphQLError(client, status: 401) { error in
             XCTAssertEqual(error, .unauthorized)
             XCTAssertTrue(error.localizedDescription.contains("Unauthorized"))
         }
-        await checkGraphQLError(client, status: 403, headers: ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "\(reset)"]) { error in
+        await checkGraphQLError(client, status: 403, headers: hdr403Limit) { error in
             guard case let .rateLimited(resetTime) = error else { return XCTFail("Expected rateLimited, got \(error)") }
             XCTAssertNotNil(resetTime)
             XCTAssertTrue(error.localizedDescription.contains("rate limit"))
         }
-        await checkGraphQLError(client, status: 403, headers: ["X-RateLimit-Remaining": "4999", "X-RateLimit-Reset": "\(reset)"]) { error in
+        await checkGraphQLError(client, status: 403, headers: hdr403OK) { error in
             XCTAssertEqual(error, .httpError(statusCode: 403))
         }
         await checkGraphQLError(client, status: 429, headers: ["Retry-After": "90"]) { error in
@@ -102,11 +107,17 @@ final class CoreServicesTests: XCTestCase {
     }
 
     @MainActor
-    func testSearchServiceCRUDAndLegacyDecoding() throws {
-        let suite = "CoreServicesTests.Search.\(UUID().uuidString)"
+    private func makeIsolatedDefaults(prefix: String) throws -> (UserDefaults, () -> Void) {
+        let suite = "\(prefix).\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        return (defaults, { defaults.removePersistentDomain(forName: suite) })
+    }
+
+    @MainActor
+    func testSearchServiceCRUDAndLegacyDecoding() throws {
+        let (defaults, cleanup) = try makeIsolatedDefaults(prefix: "CoreServicesTests.Search")
+        defer { cleanup() }
 
         let legacyId = UUID()
         let legacyJSON = #"[{"id":"\#(legacyId.uuidString)","name":"Legacy","query":"is:open","isEnabled":true,"isPinned":true,"type":"pr","createdAt":0}]"#
@@ -133,12 +144,14 @@ final class CoreServicesTests: XCTestCase {
         XCTAssertEqual(service.savedSearches.map(\.id), [added.id])
     }
 
+    private static func jsonResponse(_ url: URL, _ body: String) -> (HTTPURLResponse, Data) {
+        (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
+    }
+
     @MainActor
     func testSearchServiceDeduplicationDisabledFilteringAndPerSearchErrors() async throws {
-        let suite = "CoreServicesTests.SearchFetch.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, cleanup) = try makeIsolatedDefaults(prefix: "CoreServicesTests.SearchFetch")
+        defer { cleanup() }
 
         let session = GitHubSession()
         session.configure(token: "test-token", urlSession: MockURLProtocol.makeSession())
@@ -163,19 +176,17 @@ final class CoreServicesTests: XCTestCase {
                 if failFirstSearch.value {
                     return (HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
                 }
-                let json = Self.searchGraphQLResponse(nodes: [
+                return Self.jsonResponse(url, Self.searchGraphQLResponse(nodes: [
                     ("item-shared", 1, "Shared PR", "2026-05-20T10:00:00Z"),
                     ("item-one", 2, "First Only", "2026-05-20T09:00:00Z"),
-                ])
-                return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
+                ]))
             }
 
             if body.contains("query-two") {
-                let json = Self.searchGraphQLResponse(nodes: [
+                return Self.jsonResponse(url, Self.searchGraphQLResponse(nodes: [
                     ("item-shared", 1, "Shared PR", "2026-05-20T10:00:00Z"),
                     ("item-two", 3, "Second Only", "2026-05-20T11:00:00Z"),
-                ])
-                return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
+                ]))
             }
 
             XCTFail("Disabled search should not be fetched")
@@ -239,17 +250,17 @@ final class CoreServicesTests: XCTestCase {
         XCTAssertEqual(service.notifications.map(\.id), ["notif-1"])
 
         let ruleStorage = RuleStorage()
-        ruleStorage.addRule(NotificationRule(
+        ruleStorage.addRule(.init(
             name: "Auto Read Bot Repo",
             priority: 0,
-            conditions: [RuleCondition(field: .repository, operator: .equals, value: "bot/noisy")],
-            actions: [RuleAction(type: .markAsRead)]
+            conditions: [.init(field: .repository, operator: .equals, value: "bot/noisy")],
+            actions: [.init(type: .markAsRead)]
         ))
-        ruleStorage.addRule(NotificationRule(
+        ruleStorage.addRule(.init(
             name: "Mute Muted Repo",
             priority: 1,
-            conditions: [RuleCondition(field: .repository, operator: .equals, value: "org/muted")],
-            actions: [RuleAction(type: .suppressSystemNotification)]
+            conditions: [.init(field: .repository, operator: .equals, value: "org/muted")],
+            actions: [.init(type: .suppressSystemNotification)]
         ))
         service.ruleStorage = ruleStorage
 
@@ -265,11 +276,10 @@ final class CoreServicesTests: XCTestCase {
             ("notif-muted", "org/muted", "Muted Issue", "Issue", "mention"),
         ])
         MockURLProtocol.setHandler { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             if request.httpMethod == "PATCH" {
-                return (response, Data())
+                return Self.jsonResponse(request.url!, "")
             }
-            return (response, Data(updatedJSON.utf8))
+            return Self.jsonResponse(request.url!, updatedJSON)
         }
 
         await service.fetchNotifications(isAutoRefresh: true)
@@ -305,9 +315,7 @@ final class CoreServicesTests: XCTestCase {
     private static func notificationsJSON(_ items: [(String, String, String, String, String)]) -> String {
         let rows = items.map { id, repo, title, type, reason in
             let parts = repo.split(separator: "/")
-            let owner = String(parts.first ?? "owner")
-            let name = String(parts.last ?? "repo")
-            return #"{"id":"\#(id)","unread":true,"reason":"\#(reason)","updated_at":"2026-05-20T12:00:00Z","last_read_at":null,"subject":{"title":"\#(title)","url":null,"latest_comment_url":null,"type":"\#(type)"},"repository":{"id":1,"name":"\#(name)","full_name":"\#(repo)","html_url":"https://github.com/\#(repo)","owner":{"login":"\#(owner)"}},"url":"https://api.github.com/notifications/threads/\#(id)"}"#
+            return #"{"id":"\#(id)","unread":true,"reason":"\#(reason)","updated_at":"2026-05-20T12:00:00Z","last_read_at":null,"subject":{"title":"\#(title)","url":null,"latest_comment_url":null,"type":"\#(type)"},"repository":{"id":1,"name":"\#(parts.last ?? "repo")","full_name":"\#(repo)","html_url":"https://github.com/\#(repo)","owner":{"login":"\#(parts.first ?? "owner")"}},"url":"https://api.github.com/notifications/threads/\#(id)"}"#
         }.joined(separator: ",")
         return "[\(rows)]"
     }
@@ -316,34 +324,22 @@ final class CoreServicesTests: XCTestCase {
 private final class LockBox<Value>: @unchecked Sendable {
     private let lock = NSLock()
     private var storage: Value
-
     init(_ value: Value) {
         storage = value
     }
 
     var value: Value {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return storage
-        }
-        set {
-            lock.lock()
-            defer { lock.unlock() }
-            storage = newValue
-        }
+        get { lock.withLock { storage } }
+        set { lock.withLock { storage = newValue } }
     }
 
     func update<T>(_ body: (inout Value) -> T) -> T {
-        lock.lock()
-        defer { lock.unlock() }
-        return body(&storage)
+        lock.withLock { body(&storage) }
     }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     typealias Handler = @Sendable (URLRequest) throws -> (HTTPURLResponse, Data)
-
     private struct State: @unchecked Sendable {
         var handler: Handler?
         var delay: TimeInterval = 0
@@ -351,7 +347,6 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     private static let state = LockBox(State())
-
     static var recordedRequests: [URLRequest] {
         state.value.requests
     }
@@ -364,14 +359,13 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 
     static func respond(status: Int, headers: [String: String]? = nil, body: String = "", delay: TimeInterval = 0) {
         let data = Data(body.utf8)
-        setHandler(delay: delay) { request in
-            (HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!, data)
+        setHandler(delay: delay) { req in
+            (HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: headers)!, data)
         }
     }
 
     static func setHandler(delay: TimeInterval = 0, _ handler: @escaping Handler) {
-        state.update {
-            $0.handler = handler
+        state.update { $0.handler = handler
             $0.delay = delay
         }
     }
@@ -384,7 +378,7 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
         state.value = State()
     }
 
-    override class func canInit(with request: URLRequest) -> Bool {
+    override class func canInit(with _: URLRequest) -> Bool {
         true
     }
 
@@ -397,7 +391,6 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
             current.requests.append(request)
             return (current.handler, current.delay)
         }
-
         let deliver: @Sendable () -> Void = { [weak self] in
             guard let self else { return }
             guard let handler else {
@@ -405,15 +398,14 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
                 return
             }
             do {
-                let (response, data) = try handler(request)
-                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                let (res, data) = try handler(request)
+                client?.urlProtocol(self, didReceive: res, cacheStoragePolicy: .notAllowed)
                 client?.urlProtocol(self, didLoad: data)
                 client?.urlProtocolDidFinishLoading(self)
             } catch {
                 client?.urlProtocol(self, didFailWithError: error)
             }
         }
-
         if delay > 0 {
             DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: deliver)
         } else {

@@ -1,5 +1,5 @@
-import XCTest
 @testable import Lunt
+import XCTest
 
 final class AppConfigurationTests: XCTestCase {
     func test_init_parsesGitHubOAuthClientID() {

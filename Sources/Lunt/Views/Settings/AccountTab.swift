@@ -319,7 +319,7 @@ struct AccountTab: View {
 
     private func openVerificationURL(response: DeviceCodeResponse) {
         let urlString = response.verificationUriComplete ?? response.verificationUri
-        if let url = URL(string: urlString) {
+        if let url = URL.validatedGitHubWebURL(from: urlString) {
             NSWorkspace.shared.open(url)
         }
     }

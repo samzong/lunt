@@ -98,6 +98,10 @@ public class NotificationService {
 
             if isAutoRefresh {
                 let markedAsReadIds = await detectAndNotifyNewNotifications(fetchedNotifications)
+                guard !Task.isCancelled, session.isAuthenticated else {
+                    isLoading = false
+                    return
+                }
                 fetchedNotifications = fetchedNotifications.filter { !markedAsReadIds.contains($0.id) }
             }
 
@@ -107,7 +111,7 @@ public class NotificationService {
 
             await loadNotificationDetails()
         } catch {
-            if !Task.isCancelled {
+            if !Task.isCancelled, session.isAuthenticated, !(error is CancellationError) {
                 logger.error("Failed to fetch notifications: \(error.localizedDescription, privacy: .public)")
                 errorMessage = error.localizedDescription
             }
@@ -119,8 +123,11 @@ public class NotificationService {
     public func fetchCurrentUser() async {
         guard let graphqlClient = session.graphqlClient else { return }
         do {
-            currentUser = try await graphqlClient.fetchViewer()
+            let user = try await graphqlClient.fetchViewer()
+            guard !Task.isCancelled, session.isAuthenticated else { return }
+            currentUser = user
         } catch {
+            guard !Task.isCancelled, session.isAuthenticated, !(error is CancellationError) else { return }
             logger.error("Failed to fetch current user: \(error.localizedDescription, privacy: .public)")
             if currentUser == nil, isAuthOrRateLimitError(error) {
                 errorMessage = error.localizedDescription
@@ -192,6 +199,7 @@ public class NotificationService {
             }
 
             for await (cacheKey, details, type) in group {
+                guard !Task.isCancelled, session.isAuthenticated else { return }
                 if let details {
                     detailsCache[cacheKey] = details
 

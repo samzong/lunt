@@ -1,151 +1,70 @@
-import XCTest
-@testable import Lunt
 @testable import LuntCore
+import XCTest
 
 final class MonitorTests: XCTestCase {
-
-    // MARK: - Target Parsing Tests
-
     func testMonitorTargetParsing() {
-        let targetUser1 = MonitorTarget.parse(input: "samzong", type: "account")
-        XCTAssertEqual(targetUser1, .account(login: "samzong"))
-
-        let targetUser2 = MonitorTarget.parse(input: "@google", type: "account")
-        XCTAssertEqual(targetUser2, .account(login: "google"))
-
-        let targetUserURL = MonitorTarget.parse(input: "https://github.com/apple", type: "account")
-        XCTAssertEqual(targetUserURL, .account(login: "apple"))
-
-        let targetRepo1 = MonitorTarget.parse(input: "samzong/lunt", type: "repository")
-        XCTAssertEqual(targetRepo1, .repository(owner: "samzong", name: "lunt"))
-
-        let targetRepoURL = MonitorTarget.parse(input: "https://github.com/apple/swift", type: "repository")
-        XCTAssertEqual(targetRepoURL, .repository(owner: "apple", name: "swift"))
-
-        let targetSearch = MonitorTarget.parse(input: "is:pr is:open", type: "search", name: "My PRs")
-        XCTAssertEqual(targetSearch, .search(query: "is:pr is:open", name: "My PRs"))
-
-        let targetCode = MonitorTarget.parse(input: "TODO: fix", type: "code", name: "Fix Todo")
-        XCTAssertEqual(targetCode, .code(query: "TODO: fix", name: "Fix Todo"))
-
-        let targetInvalidURL = MonitorTarget.parse(input: "https://google.com/apple/swift", type: "repository")
-        XCTAssertNil(targetInvalidURL)
+        XCTAssertEqual(MonitorTarget.parse(input: "samzong", type: "account"), .account(login: "samzong"))
+        XCTAssertEqual(MonitorTarget.parse(input: "@google", type: "account"), .account(login: "google"))
+        XCTAssertEqual(MonitorTarget.parse(input: "https://github.com/apple", type: "account"), .account(login: "apple"))
+        XCTAssertEqual(MonitorTarget.parse(input: "samzong/lunt", type: "repository"), .repository(owner: "samzong", name: "lunt"))
+        XCTAssertEqual(
+            MonitorTarget.parse(input: "https://github.com/apple/swift", type: "repository"),
+            .repository(owner: "apple", name: "swift")
+        )
+        XCTAssertNil(MonitorTarget.parse(input: "is:pr is:open", type: "search", name: "My PRs"))
+        XCTAssertNil(MonitorTarget.parse(input: "TODO: fix", type: "code", name: "Fix Todo"))
+        XCTAssertNil(MonitorTarget.parse(input: "https://google.com/apple/swift", type: "repository"))
+        XCTAssertEqual(MonitorTarget.account(login: "samzong").badgeLabel, "account:samzong")
+        XCTAssertEqual(MonitorTarget.repository(owner: "apple", name: "swift").badgeLabel, "repository:apple/swift")
     }
 
     func testMonitorDefinitionUsesCustomDisplayName() {
         let definition = MonitorDefinition(target: .account(login: "samzong"), name: "Release Watch")
-
         XCTAssertEqual(definition.displayName, "Release Watch")
     }
 
     func testGitHubEventDecodesPullRequestURLForNotificationClick() throws {
         let json = """
-        {
-          "id": "event_123",
-          "type": "PullRequestEvent",
-          "actor": { "login": "octocat" },
-          "repo": { "name": "owner/repo" },
-          "created_at": "2026-05-21T06:30:00Z",
-          "payload": {
-            "action": "opened",
-            "pull_request": {
-              "title": "Fix notification URL",
-              "html_url": "https://github.com/owner/repo/pull/42"
-            }
-          }
-        }
+        {"id":"event_123","type":"PullRequestEvent","actor":{"login":"octocat"},"repo":{"name":"owner/repo"},"created_at":"2026-05-21T06:30:00Z","payload":{"action":"opened","pull_request":{"title":"Fix notification URL","html_url":"https://github.com/owner/repo/pull/42"}}}
         """
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let event = try decoder.decode(GitHubEvent.self, from: Data(json.utf8))
-
+        let event = try decodeGitHubEvent(json)
         XCTAssertEqual(event.monitorKind, "pr")
         XCTAssertEqual(event.monitorURL, "https://github.com/owner/repo/pull/42")
         XCTAssertEqual(event.monitorTitle, "Opened PR: Fix notification URL")
+        XCTAssertEqual(event.monitorNumber, 42)
     }
 
     func testGitHubEventBuildsPushCommitURLForNotificationClick() throws {
         let json = """
-        {
-          "id": "event_456",
-          "type": "PushEvent",
-          "actor": { "login": "octocat" },
-          "repo": { "name": "owner/repo" },
-          "created_at": "2026-05-21T06:35:00Z",
-          "payload": {
-            "commits": [
-              {
-                "sha": "abc123",
-                "message": "Fix monitor click target"
-              }
-            ]
-          }
-        }
+        {"id":"event_456","type":"PushEvent","actor":{"login":"octocat"},"repo":{"name":"owner/repo"},"created_at":"2026-05-21T06:35:00Z","payload":{"commits":[{"sha":"abc123","message":"Fix monitor click target"}]}}
         """
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let event = try decoder.decode(GitHubEvent.self, from: Data(json.utf8))
-
+        let event = try decodeGitHubEvent(json)
         XCTAssertEqual(event.monitorKind, "commit")
         XCTAssertEqual(event.monitorURL, "https://github.com/owner/repo/commit/abc123")
         XCTAssertEqual(event.monitorTitle, "Pushed commit: Fix monitor click target")
+        XCTAssertNil(event.monitorNumber)
     }
 
     func testGitHubEventUsesIssueCommentURLForNotificationClick() throws {
         let json = """
-        {
-          "id": "event_789",
-          "type": "IssueCommentEvent",
-          "actor": { "login": "octocat" },
-          "repo": { "name": "owner/repo" },
-          "created_at": "2026-05-21T06:40:00Z",
-          "payload": {
-            "action": "created",
-            "issue": {
-              "title": "Fix monitor links",
-              "html_url": "https://github.com/owner/repo/issues/7"
-            },
-            "comment": {
-              "body": "The notification should open this comment.",
-              "html_url": "https://github.com/owner/repo/issues/7#issuecomment-123"
-            }
-          }
-        }
+        {"id":"event_789","type":"IssueCommentEvent","actor":{"login":"octocat"},"repo":{"name":"owner/repo"},"created_at":"2026-05-21T06:40:00Z","payload":{"action":"created","issue":{"title":"Fix monitor links","html_url":"https://github.com/owner/repo/issues/7"},"comment":{"body":"The notification should open this comment.","html_url":"https://github.com/owner/repo/issues/7#issuecomment-123"}}}
         """
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let event = try decoder.decode(GitHubEvent.self, from: Data(json.utf8))
-
+        let event = try decodeGitHubEvent(json)
         XCTAssertEqual(event.monitorKind, "comment")
         XCTAssertEqual(event.monitorURL, "https://github.com/owner/repo/issues/7#issuecomment-123")
         XCTAssertEqual(event.monitorTitle, "Commented on: Fix monitor links")
+        XCTAssertEqual(event.monitorNumber, 7)
     }
 
     func testGitHubEventBuildsPushHeadURLWhenCommitsAreMissing() throws {
         let json = """
-        {
-          "id": "event_999",
-          "type": "PushEvent",
-          "actor": { "login": "octocat" },
-          "repo": { "name": "owner/repo" },
-          "created_at": "2026-05-21T06:45:00Z",
-          "payload": {
-            "head": "def456"
-          }
-        }
+        {"id":"event_999","type":"PushEvent","actor":{"login":"octocat"},"repo":{"name":"owner/repo"},"created_at":"2026-05-21T06:45:00Z","payload":{"head":"def456"}}
         """
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let event = try decoder.decode(GitHubEvent.self, from: Data(json.utf8))
-
+        let event = try decodeGitHubEvent(json)
         XCTAssertEqual(event.monitorKind, "commit")
         XCTAssertEqual(event.monitorURL, "https://github.com/owner/repo/commit/def456")
         XCTAssertEqual(event.monitorTitle, "Pushed commits to repository")
@@ -158,16 +77,13 @@ final class MonitorTests: XCTestCase {
         ]
 
         let result = rawEventsSinceCursor(events, cursor: "event_missing")
-
         XCTAssertEqual(result.events.map(\.id), ["event_newest", "event_older"])
         XCTAssertEqual(result.nextCursor, "event_newest")
     }
 
-    // MARK: - Store Tests
-
     @MainActor
-    func testMonitorStoreLifecycle() {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorStoreLifecycle() throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         XCTAssertTrue(store.monitors.isEmpty)
@@ -195,12 +111,11 @@ final class MonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testMonitorStoreEventsAndCursors() {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorStoreEventsAndCursors() throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         let monitorId = UUID()
-
         store.saveCursor("cursor_123", forMonitorId: monitorId)
         XCTAssertEqual(store.cursors[monitorId], "cursor_123")
 
@@ -208,23 +123,12 @@ final class MonitorTests: XCTestCase {
         store.recordSync(forMonitorId: monitorId, at: syncedAt)
         XCTAssertEqual(store.lastSyncedAt[monitorId], syncedAt)
 
-        let event1 = MonitorEvent(
-            id: "event_1",
-            kind: "commit",
-            targetId: monitorId,
-            actor: "developer",
-            repo: "org/repo",
-            title: "Pushed commit",
-            url: "https://github.com/org/repo/commit/1",
-            occurredAt: Date()
-        )
-
-        let event2 = MonitorEvent(
+        let event1 = makeMonitorEvent(id: "event_1", kind: "commit", targetId: monitorId)
+        let event2 = makeMonitorEvent(
             id: "event_2",
             kind: "issue",
             targetId: monitorId,
             actor: "tester",
-            repo: "org/repo",
             title: "Opened issue",
             url: "https://github.com/org/repo/issues/2",
             occurredAt: Date().addingTimeInterval(10)
@@ -232,7 +136,6 @@ final class MonitorTests: XCTestCase {
 
         store.addEvents([event1, event2])
         XCTAssertEqual(store.events.count, 2)
-
         XCTAssertEqual(store.events.first?.id, "event_2")
 
         store.addEvents([event1])
@@ -242,6 +145,12 @@ final class MonitorTests: XCTestCase {
         store.markEventRead(id: "event_2")
         XCTAssertTrue(store.events.first(where: { $0.id == "event_2" })?.isRead ?? false)
 
+        store.toggleEventRead(id: "event_2")
+        XCTAssertFalse(store.events.first(where: { $0.id == "event_2" })?.isRead ?? true)
+
+        store.markEventsRead(forTargetIds: [monitorId])
+        XCTAssertTrue(store.events.allSatisfy(\.isRead))
+
         store.markAllEventsRead()
         XCTAssertTrue(store.events.allSatisfy(\.isRead))
 
@@ -250,9 +159,9 @@ final class MonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testMonitorStorePersistsLastSyncedAt() {
+    func testMonitorStorePersistsLastSyncedAt() throws {
         let suiteName = "MonitorTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
@@ -267,8 +176,8 @@ final class MonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testMonitorEngineRecordsLastSyncedAfterSuccessfulSingleSync() async {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorEngineRecordsLastSyncedAfterSuccessfulSingleSync() async throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         let monitor = MonitorDefinition(target: .account(login: "samzong"))
@@ -277,13 +186,12 @@ final class MonitorTests: XCTestCase {
         let session = GitHubSession()
         session.configure(token: "test-token")
 
-        let fetchedEvent = MonitorEvent(
+        let fetchedEvent = makeMonitorEvent(
             id: "\(monitor.id.uuidString):event_1",
             kind: "commit",
             targetId: monitor.id,
             actor: "octocat",
             repo: "owner/repo",
-            title: "Pushed commit",
             url: "https://github.com/owner/repo/commit/1",
             occurredAt: Date(timeIntervalSince1970: 1_779_350_600)
         )
@@ -305,28 +213,20 @@ final class MonitorTests: XCTestCase {
         XCTAssertNotNil(store.lastSyncedAt[monitor.id])
         XCTAssertEqual(store.cursors[monitor.id], "cursor_after_sync")
         XCTAssertTrue(store.events.isEmpty)
+        XCTAssertTrue(engine.errorsByMonitorId.isEmpty)
     }
 
     @MainActor
-    func testMonitorStoreClearsEventsForSingleMonitor() {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorStoreClearsEventsForSingleMonitor() throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         let monitorId = UUID()
         let otherMonitorId = UUID()
 
         store.addEvents([
-            MonitorEvent(
-                id: "event_1",
-                kind: "commit",
-                targetId: monitorId,
-                actor: "developer",
-                repo: "org/repo",
-                title: "Pushed commit",
-                url: "https://github.com/org/repo/commit/1",
-                occurredAt: Date()
-            ),
-            MonitorEvent(
+            makeMonitorEvent(id: "event_1", kind: "commit", targetId: monitorId),
+            makeMonitorEvent(
                 id: "event_2",
                 kind: "issue",
                 targetId: otherMonitorId,
@@ -339,13 +239,12 @@ final class MonitorTests: XCTestCase {
         ])
 
         store.clearEvents(forMonitorId: monitorId)
-
         XCTAssertEqual(store.events.map(\.id), ["event_2"])
     }
 
     @MainActor
-    func testMonitorStoreRemoveMonitorClearsEventsAndCursor() {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorStoreRemoveMonitorClearsEventsAndCursor() throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         let monitor = MonitorDefinition(target: .account(login: "samzong"))
@@ -355,17 +254,8 @@ final class MonitorTests: XCTestCase {
         store.saveCursor("cursor_123", forMonitorId: monitor.id)
         store.recordSync(forMonitorId: monitor.id, at: Date(timeIntervalSince1970: 1_779_350_300))
         store.addEvents([
-            MonitorEvent(
-                id: "event_1",
-                kind: "commit",
-                targetId: monitor.id,
-                actor: "developer",
-                repo: "org/repo",
-                title: "Pushed commit",
-                url: "https://github.com/org/repo/commit/1",
-                occurredAt: Date()
-            ),
-            MonitorEvent(
+            makeMonitorEvent(id: "event_1", kind: "commit", targetId: monitor.id),
+            makeMonitorEvent(
                 id: "event_2",
                 kind: "issue",
                 targetId: otherMonitor.id,
@@ -386,8 +276,8 @@ final class MonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testMonitorStoreUpdatesNameWithoutClearingState() {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorStoreUpdatesNameWithoutClearingState() throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         let monitor = MonitorDefinition(target: .account(login: "samzong"))
@@ -395,18 +285,7 @@ final class MonitorTests: XCTestCase {
         let syncedAt = Date(timeIntervalSince1970: 1_779_350_400)
         store.saveCursor("cursor_123", forMonitorId: monitor.id)
         store.recordSync(forMonitorId: monitor.id, at: syncedAt)
-        store.addEvents([
-            MonitorEvent(
-                id: "event_1",
-                kind: "commit",
-                targetId: monitor.id,
-                actor: "developer",
-                repo: "org/repo",
-                title: "Pushed commit",
-                url: "https://github.com/org/repo/commit/1",
-                occurredAt: Date()
-            ),
-        ])
+        store.addEvents([makeMonitorEvent(id: "event_1", kind: "commit", targetId: monitor.id)])
 
         XCTAssertTrue(store.updateMonitorDetails(id: monitor.id, target: monitor.target, name: "Core Watch"))
 
@@ -417,26 +296,15 @@ final class MonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testMonitorStoreUpdatesTargetAndClearsStaleState() {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorStoreUpdatesTargetAndClearsStaleState() throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         let monitor = MonitorDefinition(target: .account(login: "samzong"))
         store.addMonitor(monitor)
         store.saveCursor("cursor_123", forMonitorId: monitor.id)
         store.recordSync(forMonitorId: monitor.id, at: Date(timeIntervalSince1970: 1_779_350_500))
-        store.addEvents([
-            MonitorEvent(
-                id: "event_1",
-                kind: "commit",
-                targetId: monitor.id,
-                actor: "developer",
-                repo: "org/repo",
-                title: "Pushed commit",
-                url: "https://github.com/org/repo/commit/1",
-                occurredAt: Date()
-            ),
-        ])
+        store.addEvents([makeMonitorEvent(id: "event_1", kind: "commit", targetId: monitor.id)])
 
         XCTAssertTrue(store.updateMonitorDetails(
             id: monitor.id,
@@ -452,8 +320,8 @@ final class MonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testMonitorStoreRejectsDuplicateTargetUpdates() {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorStoreRejectsDuplicateTargetUpdates() throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         let monitor = MonitorDefinition(target: .account(login: "samzong"))
@@ -470,15 +338,15 @@ final class MonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testMonitorStoreUpdatesExistingEventFromCanonicalEventPreservingReadState() {
-        let (store, cleanup) = makeIsolatedStore()
+    func testMonitorStoreUpdatesExistingEventFromCanonicalEventPreservingReadState() throws {
+        let (store, cleanup) = try makeIsolatedStore()
         defer { cleanup() }
 
         let monitorId = UUID()
         let initialOccurredAt = Date(timeIntervalSince1970: 1_779_349_500)
         let updatedOccurredAt = Date(timeIntervalSince1970: 1_779_350_000)
         let eventId = "\(monitorId.uuidString):pr_999"
-        let storedEvent = MonitorEvent(
+        let storedEvent = makeMonitorEvent(
             id: eventId,
             kind: "pr",
             targetId: monitorId,
@@ -489,7 +357,7 @@ final class MonitorTests: XCTestCase {
             occurredAt: initialOccurredAt,
             isRead: true
         )
-        let canonicalEvent = MonitorEvent(
+        let canonicalEvent = makeMonitorEvent(
             id: eventId,
             kind: "pr",
             targetId: monitorId,
@@ -497,7 +365,8 @@ final class MonitorTests: XCTestCase {
             repo: "owner/repo",
             title: "Updated PR title",
             url: "https://github.com/owner/repo/pull/999",
-            occurredAt: updatedOccurredAt
+            occurredAt: updatedOccurredAt,
+            number: 999
         )
 
         store.addEvents([storedEvent])
@@ -507,18 +376,51 @@ final class MonitorTests: XCTestCase {
         XCTAssertEqual(store.events[0].id, eventId)
         XCTAssertEqual(store.events[0].title, "Updated PR title")
         XCTAssertEqual(store.events[0].occurredAt, updatedOccurredAt)
+        XCTAssertEqual(store.events[0].number, 999)
         XCTAssertTrue(store.events[0].isRead)
     }
 
     @MainActor
-    private func makeIsolatedStore() -> (MonitorStore, () -> Void) {
+    private func makeIsolatedStore() throws -> (MonitorStore, () -> Void) {
         let suiteName = "MonitorTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let store = MonitorStore(defaults: defaults)
         return (store, {
             defaults.removePersistentDomain(forName: suiteName)
         })
+    }
+
+    private func decodeGitHubEvent(_ json: String) throws -> GitHubEvent {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(GitHubEvent.self, from: Data(json.utf8))
+    }
+
+    private func makeMonitorEvent(
+        id: String,
+        kind: String,
+        targetId: UUID,
+        actor: String = "developer",
+        repo: String = "org/repo",
+        title: String = "Pushed commit",
+        url: String = "https://github.com/org/repo/commit/1",
+        occurredAt: Date = Date(),
+        number: Int? = nil,
+        isRead: Bool = false
+    ) -> MonitorEvent {
+        MonitorEvent(
+            id: id,
+            kind: kind,
+            targetId: targetId,
+            actor: actor,
+            repo: repo,
+            title: title,
+            url: url,
+            occurredAt: occurredAt,
+            number: number,
+            isRead: isRead
+        )
     }
 
     private func makeGitHubEvent(id: String, occurredAt: Date) -> GitHubEvent {

@@ -1,21 +1,27 @@
 import LuntCore
+import os
 import ServiceManagement
 import SwiftUI
 
 struct GeneralTab: View {
     @Environment(NotificationService.self) private var notificationService
+    @Environment(ActivityService.self) private var activityService
+    @Environment(SearchService.self) private var searchService
+    @Environment(MonitorEngine.self) private var monitorEngine
 
     @AppStorage(UserPreferences.refreshIntervalKey) private var refreshInterval: Double = 60
+    @AppStorage(UserPreferences.showNotificationCountKey) private var showNotificationCount = true
     @AppStorage(UserPreferences.launchAtLoginKey) private var launchAtLogin = false
-    @AppStorage(UserPreferences.menubarShowNotificationsTabKey) private var showNotificationsTab = true
-    @AppStorage(UserPreferences.menubarShowActivityTabKey) private var showActivityTab = true
-    @AppStorage(UserPreferences.menubarShowSearchTabKey) private var showSearchTab = true
-    @AppStorage(UserPreferences.menubarShowWatchingTabKey) private var showWatchingTab = true
+    @AppStorage(UserPreferences.menubarShowInboxTabKey) private var showInboxTab = true
+    @AppStorage(UserPreferences.menubarShowWorkTabKey) private var showWorkTab = true
+    @AppStorage(UserPreferences.menubarShowWatchTabKey) private var showWatchTab = true
     @AppStorage("enableSystemNotifications") private var enableSystemNotifications = false
 
     @State private var isTestingNotification = false
 
     let settingsWidth: CGFloat
+
+    private let logger = Logger(subsystem: "com.samzong.lunt", category: "GeneralTab")
 
     private let refreshOptions: [(seconds: Double, label: String)] = [
         (60, "settings.refresh.1min".localized),
@@ -25,7 +31,7 @@ struct GeneralTab: View {
     ]
 
     private var enabledMainTabCount: Int {
-        [showNotificationsTab, showActivityTab, showSearchTab, showWatchingTab].count(where: { $0 })
+        [showInboxTab, showWorkTab, showWatchTab].count(where: { $0 })
     }
 
     var body: some View {
@@ -39,7 +45,12 @@ struct GeneralTab: View {
                 .pickerStyle(.menu)
                 .onChange(of: refreshInterval) { _, newValue in
                     notificationService.startAutoRefresh(interval: newValue)
+                    activityService.updateRefreshInterval(newValue)
+                    searchService.updateRefreshInterval(newValue)
+                    monitorEngine.start(interval: newValue)
                 }
+
+                Toggle("settings.menubar.show_count".localized, isOn: $showNotificationCount)
 
                 Toggle("settings.startup.launch".localized, isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
@@ -78,17 +89,14 @@ struct GeneralTab: View {
             }
 
             Section {
-                Toggle("settings.menubar.tabs.notifications".localized, isOn: $showNotificationsTab)
-                    .disabled(showNotificationsTab && enabledMainTabCount == 1)
+                Toggle("settings.menubar.tabs.inbox".localized, isOn: $showInboxTab)
+                    .disabled(showInboxTab && enabledMainTabCount == 1)
 
-                Toggle("settings.menubar.tabs.activity".localized, isOn: $showActivityTab)
-                    .disabled(showActivityTab && enabledMainTabCount == 1)
+                Toggle("settings.menubar.tabs.work".localized, isOn: $showWorkTab)
+                    .disabled(showWorkTab && enabledMainTabCount == 1)
 
-                Toggle("settings.menubar.tabs.search".localized, isOn: $showSearchTab)
-                    .disabled(showSearchTab && enabledMainTabCount == 1)
-
-                Toggle("settings.menubar.tabs.watching".localized, isOn: $showWatchingTab)
-                    .disabled(showWatchingTab && enabledMainTabCount == 1)
+                Toggle("settings.menubar.tabs.watch".localized, isOn: $showWatchTab)
+                    .disabled(showWatchTab && enabledMainTabCount == 1)
 
                 Text("settings.menubar.tabs.description".localized)
                     .font(.caption)
@@ -116,7 +124,9 @@ struct GeneralTab: View {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            print("Failed to \(enabled ? "enable" : "disable") launch at login: \(error.localizedDescription)")
+            let action = enabled ? "enable" : "disable"
+            let message = error.localizedDescription
+            logger.error("Failed to \(action, privacy: .public) launch at login: \(message, privacy: .public)")
         }
     }
 
@@ -143,8 +153,8 @@ struct GeneralTab: View {
     }
 
     private func normalizeMainTabVisibilityIfNeeded() {
-        if !showNotificationsTab, !showActivityTab, !showSearchTab, !showWatchingTab {
-            showNotificationsTab = true
+        if !showInboxTab, !showWorkTab, !showWatchTab {
+            showInboxTab = true
         }
     }
 }
