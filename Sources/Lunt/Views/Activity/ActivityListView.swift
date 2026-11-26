@@ -11,12 +11,17 @@ struct ActivityListView: View {
     var body: some View {
         if service.isLoading, service.items.isEmpty {
             loadingView
+        } else if !displayedItems.isEmpty {
+            VStack(spacing: 0) {
+                if let error = service.errorMessage {
+                    InlineErrorBanner(message: error)
+                }
+                listView
+            }
         } else if let error = service.errorMessage {
             errorView(error)
-        } else if displayedItems.isEmpty {
-            emptyView
         } else {
-            listView
+            emptyView
         }
     }
 

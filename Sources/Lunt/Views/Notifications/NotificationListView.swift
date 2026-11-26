@@ -10,12 +10,17 @@ struct NotificationListView: View {
     var body: some View {
         if service.isLoading, service.notifications.isEmpty {
             loadingView
+        } else if !filteredGroups.isEmpty {
+            VStack(spacing: 0) {
+                if let error = service.errorMessage {
+                    InlineErrorBanner(message: error)
+                }
+                listView
+            }
         } else if let error = service.errorMessage {
             errorView(error)
-        } else if filteredGroups.isEmpty {
-            emptyView
         } else {
-            listView
+            emptyView
         }
     }
 

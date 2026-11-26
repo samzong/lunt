@@ -63,16 +63,8 @@ public actor GitHubGraphQLClient {
             throw GraphQLError.unauthorized
         }
 
-        if http.statusCode == 403 || http.statusCode == 429 {
-            if let resetHeader = http.value(forHTTPHeaderField: "X-RateLimit-Reset"),
-               let resetTimestamp = TimeInterval(resetHeader) {
-                let resetDate = Date(timeIntervalSince1970: resetTimestamp)
-                throw GraphQLError.rateLimited(resetTime: resetDate)
-            }
-            if let remaining = http.value(forHTTPHeaderField: "X-RateLimit-Remaining"),
-               remaining == "0" {
-                throw GraphQLError.rateLimited(resetTime: nil)
-            }
+        if http.isGitHubRateLimited {
+            throw GraphQLError.rateLimited(resetTime: http.gitHubRateLimitResetDate)
         }
 
         guard http.statusCode == 200 else {

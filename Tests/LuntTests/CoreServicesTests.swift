@@ -14,29 +14,24 @@ final class CoreServicesTests: XCTestCase {
     }
 
     func testGitHubAPIErrorMapping() async {
-        let session = MockURLProtocol.makeSession()
-        let api = GitHubAPI(token: "test-token", session: session)
+        let api = GitHubAPI(token: "test-token", session: MockURLProtocol.makeSession())
+        let reset = Int(Date().addingTimeInterval(300).timeIntervalSince1970)
 
-        MockURLProtocol.respond(status: 401)
-        await assertThrows(APIError.self) {
-            _ = try await api.fetchNotifications()
-        } verify: { error in
+        await checkAPIError(api, status: 401) { error in
             guard case .unauthorized = error else { return XCTFail("Expected unauthorized, got \(error)") }
         }
-
-        let reset = Int(Date().addingTimeInterval(300).timeIntervalSince1970)
-        MockURLProtocol.respond(status: 403, headers: ["X-RateLimit-Reset": "\(reset)"])
-        await assertThrows(APIError.self) {
-            _ = try await api.fetchNotifications()
-        } verify: { error in
+        await checkAPIError(api, status: 403, headers: ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "\(reset)"]) { error in
             guard case let .rateLimited(resetTime) = error else { return XCTFail("Expected rateLimited, got \(error)") }
             XCTAssertNotNil(resetTime)
         }
-
-        MockURLProtocol.respond(status: 429, headers: ["X-RateLimit-Remaining": "0"])
-        await assertThrows(APIError.self) {
-            _ = try await api.fetchNotifications()
-        } verify: { error in
+        await checkAPIError(api, status: 403, headers: ["X-RateLimit-Remaining": "4999", "X-RateLimit-Reset": "\(reset)"]) { error in
+            guard case .httpError(statusCode: 403) = error else { return XCTFail("Expected httpError(403), got \(error)") }
+        }
+        await checkAPIError(api, status: 429, headers: ["Retry-After": "120"]) { error in
+            guard case let .rateLimited(resetTime) = error else { return XCTFail("Expected rateLimited, got \(error)") }
+            XCTAssertNotNil(resetTime)
+        }
+        await checkAPIError(api, status: 429) { error in
             guard case let .rateLimited(resetTime) = error else { return XCTFail("Expected rateLimited, got \(error)") }
             XCTAssertNil(resetTime)
         }
@@ -48,41 +43,33 @@ final class CoreServicesTests: XCTestCase {
     }
 
     func testGitHubGraphQLClientErrorMapping() async {
-        let session = MockURLProtocol.makeSession()
-        let client = GitHubGraphQLClient(token: "test-token", session: session)
+        let client = GitHubGraphQLClient(token: "test-token", session: MockURLProtocol.makeSession())
+        let reset = Int(Date().addingTimeInterval(600).timeIntervalSince1970)
 
-        MockURLProtocol.respond(status: 401)
-        await assertThrows(GraphQLError.self) {
-            _ = try await client.fetchViewer()
-        } verify: { error in
+        await checkGraphQLError(client, status: 401) { error in
             XCTAssertEqual(error, .unauthorized)
             XCTAssertTrue(error.localizedDescription.contains("Unauthorized"))
         }
-
-        let reset = Int(Date().addingTimeInterval(600).timeIntervalSince1970)
-        MockURLProtocol.respond(status: 403, headers: ["X-RateLimit-Reset": "\(reset)"])
-        await assertThrows(GraphQLError.self) {
-            _ = try await client.search(query: "is:open")
-        } verify: { error in
+        await checkGraphQLError(client, status: 403, headers: ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "\(reset)"]) { error in
             guard case let .rateLimited(resetTime) = error else { return XCTFail("Expected rateLimited, got \(error)") }
             XCTAssertNotNil(resetTime)
             XCTAssertTrue(error.localizedDescription.contains("rate limit"))
         }
-
-        MockURLProtocol.respond(status: 429, headers: ["X-RateLimit-Remaining": "0"])
-        await assertThrows(GraphQLError.self) {
-            _ = try await client.search(query: "is:open")
-        } verify: { error in
+        await checkGraphQLError(client, status: 403, headers: ["X-RateLimit-Remaining": "4999", "X-RateLimit-Reset": "\(reset)"]) { error in
+            XCTAssertEqual(error, .httpError(statusCode: 403))
+        }
+        await checkGraphQLError(client, status: 429, headers: ["Retry-After": "90"]) { error in
+            guard case let .rateLimited(resetTime) = error else { return XCTFail("Expected rateLimited, got \(error)") }
+            XCTAssertNotNil(resetTime)
+        }
+        await checkGraphQLError(client, status: 429) { error in
             XCTAssertEqual(error, .rateLimited(resetTime: nil))
         }
-
-        MockURLProtocol.respond(
+        await checkGraphQLError(
+            client,
             status: 200,
             body: #"{"data":null,"errors":[{"message":"API rate limit exceeded in GraphQL"}]}"#
-        )
-        await assertThrows(GraphQLError.self) {
-            _ = try await client.fetchViewer()
-        } verify: { error in
+        ) { error in
             XCTAssertEqual(error, .graphQLErrors(["API rate limit exceeded in GraphQL"]))
             XCTAssertTrue(error.localizedDescription.contains("API rate limit exceeded in GraphQL"))
         }
@@ -91,6 +78,27 @@ final class CoreServicesTests: XCTestCase {
         await assertThrows(DecodingError.self) {
             _ = try await client.fetchViewer()
         }
+    }
+
+    private func checkAPIError(
+        _ api: GitHubAPI,
+        status: Int,
+        headers: [String: String]? = nil,
+        verify: (APIError) -> Void
+    ) async {
+        MockURLProtocol.respond(status: status, headers: headers)
+        await assertThrows(APIError.self, operation: { _ = try await api.fetchNotifications() }, verify: verify)
+    }
+
+    private func checkGraphQLError(
+        _ client: GitHubGraphQLClient,
+        status: Int,
+        headers: [String: String]? = nil,
+        body: String = "",
+        verify: (GraphQLError) -> Void
+    ) async {
+        MockURLProtocol.respond(status: status, headers: headers, body: body)
+        await assertThrows(GraphQLError.self, operation: { _ = try await client.search(query: "is:open") }, verify: verify)
     }
 
     @MainActor
@@ -325,6 +333,12 @@ private final class LockBox<Value>: @unchecked Sendable {
             storage = newValue
         }
     }
+
+    func update<T>(_ body: (inout Value) -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body(&storage)
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
@@ -336,7 +350,6 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
         var requests: [URLRequest] = []
     }
 
-    private static let lock = NSLock()
     private static let state = LockBox(State())
 
     static var recordedRequests: [URLRequest] {
@@ -352,31 +365,22 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     static func respond(status: Int, headers: [String: String]? = nil, body: String = "", delay: TimeInterval = 0) {
         let data = Data(body.utf8)
         setHandler(delay: delay) { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!
-            return (response, data)
+            (HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!, data)
         }
     }
 
     static func setHandler(delay: TimeInterval = 0, _ handler: @escaping Handler) {
-        lock.lock()
-        defer { lock.unlock() }
-        var current = state.value
-        current.handler = handler
-        current.delay = delay
-        state.value = current
+        state.update {
+            $0.handler = handler
+            $0.delay = delay
+        }
     }
 
     static func resetRequests() {
-        lock.lock()
-        defer { lock.unlock() }
-        var current = state.value
-        current.requests = []
-        state.value = current
+        state.update { $0.requests = [] }
     }
 
     static func reset() {
-        lock.lock()
-        defer { lock.unlock() }
         state.value = State()
     }
 
@@ -389,13 +393,10 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override func startLoading() {
-        Self.lock.lock()
-        var current = Self.state.value
-        current.requests.append(request)
-        let handler = current.handler
-        let delay = current.delay
-        Self.state.value = current
-        Self.lock.unlock()
+        let (handler, delay) = Self.state.update { current -> (Handler?, TimeInterval) in
+            current.requests.append(request)
+            return (current.handler, current.delay)
+        }
 
         let deliver: @Sendable () -> Void = { [weak self] in
             guard let self else { return }
