@@ -1,7 +1,5 @@
 import Foundation
 
-/// Pure GraphQL client for GitHub API
-/// For notifications management, use GitHubAPI (REST)
 public actor GitHubGraphQLClient {
     private let graphqlEndpoint: URL
     private let token: String
@@ -15,24 +13,22 @@ public actor GitHubGraphQLClient {
 
     public init(
         token: String,
-        graphqlEndpoint: URL = URL(string: "https://api.github.com/graphql")!
+        graphqlEndpoint: URL = URL(string: "https://api.github.com/graphql")!,
+        session: URLSession? = nil
     ) {
         self.token = token
         self.graphqlEndpoint = graphqlEndpoint
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 60
-        self.session = URLSession(configuration: configuration)
-    }
-
-    // MARK: - User Info
-
-    public struct ViewerInfo: Decodable, Sendable {
-        public let login: String
-        public let avatarUrl: String
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            configuration.urlCache = nil
+            configuration.timeoutIntervalForRequest = 30
+            configuration.timeoutIntervalForResource = 60
+            self.session = URLSession(configuration: configuration)
+        }
     }
 
     public func fetchViewer() async throws -> ViewerInfo {
@@ -49,13 +45,6 @@ public actor GitHubGraphQLClient {
         return result.viewer
     }
 
-    private struct ViewerData: Decodable {
-        let viewer: ViewerInfo
-    }
-
-    // MARK: - Core Query Method
-
-    /// Execute GraphQL query
     private func execute<T: Decodable>(query: String, variables: [String: Any] = [:]) async throws -> T {
         let body = GraphQLRequest(query: query, variables: variables)
 
@@ -70,10 +59,15 @@ public actor GitHubGraphQLClient {
             throw GraphQLError.invalidResponse
         }
 
+        if http.statusCode == 401 {
+            throw GraphQLError.unauthorized
+        }
+
+        if http.isGitHubRateLimited {
+            throw GraphQLError.rateLimited(resetTime: http.gitHubRateLimitResetDate)
+        }
+
         guard http.statusCode == 200 else {
-            if http.statusCode == 401 {
-                throw GraphQLError.unauthorized
-            }
             throw GraphQLError.httpError(statusCode: http.statusCode)
         }
 
@@ -90,9 +84,6 @@ public actor GitHubGraphQLClient {
         return data
     }
 
-    // MARK: - Notification Details
-
-    /// Fetch notification details including reason and latest comment
     public func fetchNotificationDetails(
         owner: String,
         repo: String,
@@ -190,221 +181,7 @@ public actor GitHubGraphQLClient {
             return issue.toDetails()
         }
     }
-}
 
-// MARK: - Request/Response Types
-
-private struct GraphQLRequest: Encodable {
-    let query: String
-    let variables: [String: Any]
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(query, forKey: .query)
-        try container.encode(AnyCodable(variables), forKey: .variables)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case query, variables
-    }
-}
-
-private struct GraphQLResponse<T: Decodable>: Decodable {
-    let data: T?
-    let errors: [GraphQLErrorDetail]?
-}
-
-private struct GraphQLErrorDetail: Decodable {
-    let message: String
-}
-
-// MARK: - Response Models
-
-public struct NotificationDetails: Sendable {
-    public let title: String
-    public let state: String
-    public let author: Author?
-    public let updatedAt: Date
-    public let latestComment: Comment?
-    public let ciStatus: CIStatus?
-    public let reviews: [Review]?
-}
-
-public struct Author: Codable, Sendable {
-    public let login: String
-    public let avatarUrl: String?
-}
-
-public struct Comment: Codable, Sendable {
-    public let author: Author?
-    public let body: String
-    public let createdAt: Date
-}
-
-public struct CIStatus: Sendable, Hashable {
-    public let state: String // SUCCESS, FAILURE, PENDING, ERROR
-    public let checks: [CheckResult]
-}
-
-public struct CheckResult: Sendable, Hashable {
-    public let name: String
-    public let status: String // COMPLETED, IN_PROGRESS, QUEUED
-    public let conclusion: String? // SUCCESS, FAILURE, NEUTRAL, CANCELLED, SKIPPED
-}
-
-public struct Review: Codable, Sendable {
-    public let author: Author?
-    public let state: String // APPROVED, CHANGES_REQUESTED
-}
-
-public enum NotificationSubjectType: Sendable {
-    case pullRequest
-    case issue
-}
-
-// MARK: - Internal Decodable Models
-
-private struct NotificationDetailsData: Decodable {
-    let repository: RepositoryDetails
-}
-
-private struct RepositoryDetails: Decodable {
-    let pullRequest: PullRequestDetails?
-    let issue: IssueDetails?
-}
-
-private struct PullRequestDetails: Decodable {
-    let title: String
-    let state: String
-    let author: Author?
-    let updatedAt: Date
-    let comments: CommentConnection
-    let commits: CommitConnection?
-    let reviews: ReviewConnection?
-
-    func toDetails() -> NotificationDetails {
-        let latestComment = comments.nodes.first
-        let ciStatus = commits?.nodes.first?.commit.statusCheckRollup?.toCIStatus()
-        let reviewList = reviews?.nodes
-
-        return NotificationDetails(
-            title: title,
-            state: state,
-            author: author,
-            updatedAt: updatedAt,
-            latestComment: latestComment,
-            ciStatus: ciStatus,
-            reviews: reviewList
-        )
-    }
-}
-
-private struct IssueDetails: Decodable {
-    let title: String
-    let state: String
-    let author: Author?
-    let updatedAt: Date
-    let comments: CommentConnection
-
-    func toDetails() -> NotificationDetails {
-        let latestComment = comments.nodes.first
-
-        return NotificationDetails(
-            title: title,
-            state: state,
-            author: author,
-            updatedAt: updatedAt,
-            latestComment: latestComment,
-            ciStatus: nil,
-            reviews: nil
-        )
-    }
-}
-
-private struct CommentConnection: Decodable {
-    let nodes: [Comment]
-}
-
-private struct CommitConnection: Decodable {
-    let nodes: [CommitNode]
-}
-
-private struct CommitNode: Decodable {
-    let commit: CommitDetails
-}
-
-private struct CommitDetails: Decodable {
-    let statusCheckRollup: StatusCheckRollup?
-}
-
-private struct StatusCheckRollup: Decodable {
-    let state: String
-    let contexts: ContextConnection
-
-    func toCIStatus() -> CIStatus {
-        let checks = contexts.nodes.compactMap { node -> CheckResult? in
-            if let checkRun = node.checkRun {
-                return CheckResult(
-                    name: checkRun.name,
-                    status: checkRun.status,
-                    conclusion: checkRun.conclusion
-                )
-            } else if let statusContext = node.statusContext {
-                return CheckResult(
-                    name: statusContext.context,
-                    status: "COMPLETED",
-                    conclusion: statusContext.state
-                )
-            }
-            return nil
-        }
-
-        return CIStatus(state: state, checks: checks)
-    }
-}
-
-private struct ContextConnection: Decodable {
-    let nodes: [ContextNode]
-}
-
-private struct ContextNode: Decodable {
-    let checkRun: CheckRun?
-    let statusContext: StatusContext?
-
-    private enum CodingKeys: String, CodingKey {
-        case checkRun, statusContext
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        checkRun = try? container.decode(CheckRun.self, forKey: .checkRun)
-        statusContext = try? container.decode(StatusContext.self, forKey: .statusContext)
-    }
-}
-
-private struct CheckRun: Decodable {
-    let name: String
-    let conclusion: String?
-    let status: String
-}
-
-private struct StatusContext: Decodable {
-    let context: String
-    let state: String
-}
-
-private struct ReviewConnection: Decodable {
-    let nodes: [Review]
-}
-
-// MARK: - Search API (I1 Infrastructure)
-
-extension GitHubGraphQLClient {
-    /// Search for Issues and Pull Requests using GitHub Search API
-    /// - Parameters:
-    ///   - query: GitHub search syntax (e.g., "is:open author:@me")
-    ///   - first: Number of results to return
-    /// - Returns: Array of SearchResultItem
     public func search(query: String, first: Int = 50) async throws -> [SearchResultItem] {
         let graphqlQuery = """
         query($query: String!, $first: Int!) {
@@ -496,126 +273,7 @@ extension GitHubGraphQLClient {
             )
         }
     }
-}
 
-private struct SearchData: Decodable {
-    let search: SearchConnection
-}
-
-private struct SearchConnection: Decodable {
-    let nodes: [SearchNode]
-}
-
-private struct SearchNode: Decodable {
-    let typename: String?
-    let id: String?
-    let number: Int?
-    let title: String?
-    let state: String?
-    let repository: SearchRepository?
-    let author: Author?
-    let updatedAt: Date?
-    let commits: CommitConnection?
-
-    private enum CodingKeys: String, CodingKey {
-        case typename = "__typename"
-        case id, number, title, state, repository, author, updatedAt, commits
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        typename = try container.decodeIfPresent(String.self, forKey: .typename)
-        id = try container.decodeIfPresent(String.self, forKey: .id)
-        number = try container.decodeIfPresent(Int.self, forKey: .number)
-        title = try container.decodeIfPresent(String.self, forKey: .title)
-        state = try container.decodeIfPresent(String.self, forKey: .state)
-        repository = try container.decodeIfPresent(SearchRepository.self, forKey: .repository)
-        author = try container.decodeIfPresent(Author.self, forKey: .author)
-        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
-        commits = try container.decodeIfPresent(CommitConnection.self, forKey: .commits)
-    }
-}
-
-private struct SearchRepository: Decodable {
-    let owner: RepositoryOwner
-    let name: String
-}
-
-private struct RepositoryOwner: Decodable {
-    let login: String
-}
-
-// MARK: - Error Types
-
-public enum GraphQLError: Error, LocalizedError {
-    case invalidResponse
-    case unauthorized
-    case httpError(statusCode: Int)
-    case graphQLErrors([String])
-    case noData
-    case notFound(String)
-
-    public var errorDescription: String? {
-        switch self {
-        case .invalidResponse:
-            "Invalid GraphQL response"
-        case .unauthorized:
-            "Unauthorized: Invalid or expired token"
-        case let .httpError(statusCode):
-            "HTTP error: \(statusCode)"
-        case let .graphQLErrors(errors):
-            "GraphQL errors: \(errors.joined(separator: ", "))"
-        case .noData:
-            "No data returned from GraphQL"
-        case let .notFound(message):
-            message
-        }
-    }
-}
-
-// MARK: - Helper: AnyCodable for encoding arbitrary JSON
-
-private struct AnyCodable: Encodable {
-    let value: Any
-
-    init(_ value: Any) {
-        self.value = value
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-
-        switch value {
-        case let dict as [String: Any]:
-            try container.encode(dict.mapValues { AnyCodable($0) })
-        case let array as [Any]:
-            try container.encode(array.map { AnyCodable($0) })
-        case let string as String:
-            try container.encode(string)
-        case let int as Int:
-            try container.encode(int)
-        case let double as Double:
-            try container.encode(double)
-        case let bool as Bool:
-            try container.encode(bool)
-        default:
-            throw EncodingError.invalidValue(
-                value,
-                EncodingError.Context(
-                    codingPath: container.codingPath,
-                    debugDescription: "Invalid JSON value"
-                )
-            )
-        }
-    }
-}
-
-// MARK: - Repository Search API
-
-extension GitHubGraphQLClient {
-    /// Query examples:
-    ///   - "user:kubernetes created:>2026-01-01"
-    ///   - "org:google language:go"
     public func searchRepositories(query: String, first: Int = 30) async throws -> [RepositorySearchItem] {
         let graphqlQuery = """
         query($query: String!, $first: Int!) {
@@ -661,35 +319,4 @@ extension GitHubGraphQLClient {
             )
         }
     }
-}
-
-// MARK: - Repository Search Response Models
-
-private struct RepoSearchData: Decodable {
-    let search: RepoSearchConnection
-}
-
-private struct RepoSearchConnection: Decodable {
-    let nodes: [RepoSearchNode]
-}
-
-private struct RepoSearchNode: Decodable {
-    let id: String?
-    let name: String?
-    let owner: RepoOwner?
-    let description: String?
-    let stargazerCount: Int?
-    let primaryLanguage: PrimaryLanguage?
-    let createdAt: Date?
-    let updatedAt: Date?
-    let isPrivate: Bool?
-    let isFork: Bool?
-}
-
-private struct RepoOwner: Decodable {
-    let login: String
-}
-
-private struct PrimaryLanguage: Decodable {
-    let name: String
 }

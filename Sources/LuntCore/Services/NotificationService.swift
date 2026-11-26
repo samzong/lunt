@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 @Observable
 @MainActor
@@ -7,6 +8,7 @@ public class NotificationService {
     public var currentUser: GitHubGraphQLClient.ViewerInfo?
     public var isLoading = false
     public var errorMessage: String?
+    public private(set) var lastSyncedAt: Date?
     public var isAuthenticated: Bool {
         session.isAuthenticated
     }
@@ -16,15 +18,14 @@ public class NotificationService {
     }
 
     private let session: GitHubSession
-    // nonisolated(unsafe) required for mutable properties accessed from deinit
+    private let logger = Logger(subsystem: "com.samzong.lunt", category: "NotificationService")
     @ObservationIgnored private nonisolated(unsafe) var autoRefreshTask: Task<Void, Never>?
-    @ObservationIgnored private nonisolated(unsafe) var initialFetchTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var activeFetchTask: Task<Void, Never>?
     private var prStateCache: [String: PRState] = [:]
     private var issueStateCache: [String: IssueState] = [:]
     private var detailsCache: [String: NotificationDetails] = [:]
     private var previousNotificationIds: Set<String> = []
 
-    // Rule engine integration
     public var ruleStorage: RuleStorage?
     private let ruleEngine = RuleEngine()
 
@@ -37,16 +38,12 @@ public class NotificationService {
 
     deinit {
         autoRefreshTask?.cancel()
-        initialFetchTask?.cancel()
+        activeFetchTask?.cancel()
     }
 
     private func startAutoRefreshIfNeeded() {
         let interval = UserDefaults.standard.double(forKey: UserPreferences.refreshIntervalKey)
         startAutoRefresh(interval: interval > 0 ? interval : 60)
-
-        initialFetchTask = Task { [weak self] in
-            await self?.fetchNotifications()
-        }
     }
 
     public func configure() {
@@ -55,9 +52,12 @@ public class NotificationService {
 
     public func clearToken() {
         stopAutoRefresh()
-        initialFetchTask?.cancel()
+        activeFetchTask?.cancel()
+        activeFetchTask = nil
         notifications = []
+        currentUser = nil
         errorMessage = nil
+        lastSyncedAt = nil
         isLoading = false
         prStateCache = [:]
         issueStateCache = [:]
@@ -66,6 +66,21 @@ public class NotificationService {
     }
 
     public func fetchNotifications(isAutoRefresh: Bool = false) async {
+        if let activeFetchTask {
+            await activeFetchTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.activeFetchTask = nil }
+            await self.performFetchNotifications(isAutoRefresh: isAutoRefresh)
+        }
+        activeFetchTask = task
+        await task.value
+    }
+
+    private func performFetchNotifications(isAutoRefresh: Bool) async {
         guard let restClient = session.restClient else {
             errorMessage = "GitHub token not configured"
             return
@@ -76,19 +91,26 @@ public class NotificationService {
 
         do {
             var fetchedNotifications = try await restClient.fetchNotifications()
+            guard !Task.isCancelled, session.isAuthenticated else {
+                isLoading = false
+                return
+            }
 
             if isAutoRefresh {
                 let markedAsReadIds = await detectAndNotifyNewNotifications(fetchedNotifications)
-                // Filter out notifications that were auto-marked as read by rules
                 fetchedNotifications = fetchedNotifications.filter { !markedAsReadIds.contains($0.id) }
             }
 
             notifications = fetchedNotifications
+            lastSyncedAt = Date()
             pruneStaleCache()
 
             await loadNotificationDetails()
         } catch {
-            errorMessage = error.localizedDescription
+            if !Task.isCancelled {
+                logger.error("Failed to fetch notifications: \(error.localizedDescription, privacy: .public)")
+                errorMessage = error.localizedDescription
+            }
         }
 
         isLoading = false
@@ -99,8 +121,31 @@ public class NotificationService {
         do {
             currentUser = try await graphqlClient.fetchViewer()
         } catch {
-            print("Failed to fetch current user: \(error)")
+            logger.error("Failed to fetch current user: \(error.localizedDescription, privacy: .public)")
+            if currentUser == nil, isAuthOrRateLimitError(error) {
+                errorMessage = error.localizedDescription
+            }
         }
+    }
+
+    private func isAuthOrRateLimitError(_ error: Error) -> Bool {
+        if let graphQLError = error as? GraphQLError {
+            switch graphQLError {
+            case .unauthorized, .rateLimited:
+                return true
+            default:
+                return false
+            }
+        }
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .unauthorized, .rateLimited:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     private func loadNotificationDetails() async {

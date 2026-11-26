@@ -16,19 +16,19 @@ public final class GitHubAPI: Sendable {
         return decoder
     }
 
-    /// Initializes a new GitHub REST API client.
-    ///
-    /// - Parameter token: GitHub personal access token for authentication
-    public init(token: String) {
+    public init(token: String, session: URLSession? = nil) {
         self.token = token
 
-        // GitHub notifications are time-sensitive; avoid stale results from URLSession/URLCache.
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 60
-        self.session = URLSession(configuration: configuration)
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            configuration.urlCache = nil
+            configuration.timeoutIntervalForRequest = 30
+            configuration.timeoutIntervalForResource = 60
+            self.session = URLSession(configuration: configuration)
+        }
     }
 
     // MARK: - Notifications (REST only - not available via GraphQL)
@@ -80,22 +80,12 @@ public final class GitHubAPI: Sendable {
             throw APIError.invalidResponse
         }
 
-        // Handle rate limiting
-        if httpResponse.statusCode == 403 || httpResponse.statusCode == 429 {
-            if let resetHeader = httpResponse.value(forHTTPHeaderField: "X-RateLimit-Reset"),
-               let resetTimestamp = TimeInterval(resetHeader) {
-                let resetDate = Date(timeIntervalSince1970: resetTimestamp)
-                throw APIError.rateLimited(resetTime: resetDate)
-            }
-            if let remaining = httpResponse.value(forHTTPHeaderField: "X-RateLimit-Remaining"),
-               remaining == "0" {
-                throw APIError.rateLimited(resetTime: nil)
-            }
-        }
-
-        // Handle unauthorized
         if httpResponse.statusCode == 401 {
             throw APIError.unauthorized
+        }
+
+        if httpResponse.isGitHubRateLimited {
+            throw APIError.rateLimited(resetTime: httpResponse.gitHubRateLimitResetDate)
         }
 
         guard (200 ... 299).contains(httpResponse.statusCode) else {
@@ -103,6 +93,37 @@ public final class GitHubAPI: Sendable {
         }
 
         return data
+    }
+}
+
+extension HTTPURLResponse {
+    var isGitHubRateLimited: Bool {
+        if statusCode == 429 {
+            return true
+        }
+        guard statusCode == 403 else {
+            return false
+        }
+        if value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0" {
+            return true
+        }
+        if let retryAfter = value(forHTTPHeaderField: "Retry-After"),
+           !retryAfter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return true
+        }
+        return false
+    }
+
+    var gitHubRateLimitResetDate: Date? {
+        if let resetHeader = value(forHTTPHeaderField: "X-RateLimit-Reset"),
+           let resetTimestamp = TimeInterval(resetHeader) {
+            return Date(timeIntervalSince1970: resetTimestamp)
+        }
+        if let retryAfter = value(forHTTPHeaderField: "Retry-After"),
+           let seconds = TimeInterval(retryAfter.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return Date().addingTimeInterval(seconds)
+        }
+        return nil
     }
 }
 

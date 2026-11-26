@@ -1,37 +1,44 @@
 import Foundation
+import os
 
 @Observable
 @MainActor
 public class SearchService {
-    // MARK: - Published State
-
     public private(set) var items: [SearchResultItem] = []
     public private(set) var repositoryItems: [RepositorySearchItem] = []
     public private(set) var savedSearches: [SavedSearch] = []
     public private(set) var isLoading = false
     public private(set) var errorMessage: String?
+    public private(set) var lastSyncedAt: Date?
+    public private(set) var errorsBySearchId: [UUID: String] = [:]
 
     public private(set) var resultsBySearchId: [UUID: [SearchResultItem]] = [:]
     public private(set) var repositoryResultsBySearchId: [UUID: [RepositorySearchItem]] = [:]
 
-    // MARK: - Private
-
     private let session: GitHubSession
-    private let storageKey = "savedSearches"
+    private let defaults: UserDefaults
+    private let storageKey: String
+    private let logger = Logger(subsystem: "com.samzong.lunt", category: "SearchService")
 
     @ObservationIgnored private nonisolated(unsafe) var autoRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var activeFetchTask: Task<Void, Never>?
 
-    private let refreshInterval: TimeInterval = 300 // 5 min
+    private let refreshInterval: TimeInterval = 300
 
-    // MARK: - Initialization
-
-    public init(session: GitHubSession) {
+    public init(
+        session: GitHubSession,
+        defaults: UserDefaults = .standard,
+        storageKey: String = "savedSearches"
+    ) {
         self.session = session
+        self.defaults = defaults
+        self.storageKey = storageKey
         loadFromStorage()
     }
 
     deinit {
         autoRefreshTask?.cancel()
+        activeFetchTask?.cancel()
     }
 
     public func configure() {
@@ -40,17 +47,32 @@ public class SearchService {
 
     public func clearToken() {
         stopAutoRefresh()
+        activeFetchTask?.cancel()
+        activeFetchTask = nil
         items = []
         repositoryItems = []
         resultsBySearchId = [:]
         repositoryResultsBySearchId = [:]
+        errorsBySearchId = [:]
         errorMessage = nil
+        lastSyncedAt = nil
+        isLoading = false
     }
 
-    // MARK: - CRUD Operations
-
-    public func addSearch(name: String, query: String, type: SearchType = .all, isPinned: Bool = false) {
-        let search = SavedSearch(name: name, query: query, isPinned: isPinned, type: type)
+    public func addSearch(
+        name: String,
+        query: String,
+        type: SearchType = .all,
+        isPinned: Bool = false,
+        watchAlerts: Bool = false
+    ) {
+        let search = SavedSearch(
+            name: name,
+            query: query,
+            isPinned: isPinned,
+            type: type,
+            watchAlerts: watchAlerts
+        )
         savedSearches.append(search)
         saveToStorage()
     }
@@ -61,19 +83,22 @@ public class SearchService {
         public var isEnabled: Bool?
         public var isPinned: Bool?
         public var type: SearchType?
+        public var watchAlerts: Bool?
 
         public init(
             name: String? = nil,
             query: String? = nil,
             isEnabled: Bool? = nil,
             isPinned: Bool? = nil,
-            type: SearchType? = nil
+            type: SearchType? = nil,
+            watchAlerts: Bool? = nil
         ) {
             self.name = name
             self.query = query
             self.isEnabled = isEnabled
             self.isPinned = isPinned
             self.type = type
+            self.watchAlerts = watchAlerts
         }
     }
 
@@ -94,6 +119,9 @@ public class SearchService {
         if let type = options.type {
             savedSearches[index].type = type
         }
+        if let watchAlerts = options.watchAlerts {
+            savedSearches[index].watchAlerts = watchAlerts
+        }
         saveToStorage()
     }
 
@@ -101,6 +129,7 @@ public class SearchService {
         savedSearches.removeAll { $0.id == id }
         resultsBySearchId.removeValue(forKey: id)
         repositoryResultsBySearchId.removeValue(forKey: id)
+        errorsBySearchId.removeValue(forKey: id)
         saveToStorage()
         aggregateResults()
         aggregateRepositoryResults()
@@ -114,9 +143,22 @@ public class SearchService {
         aggregateRepositoryResults()
     }
 
-    // MARK: - Fetching
-
     public func fetchAll() async {
+        if let activeFetchTask {
+            await activeFetchTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.activeFetchTask = nil }
+            await self.performFetchAll()
+        }
+        activeFetchTask = task
+        await task.value
+    }
+
+    private func performFetchAll() async {
         guard let graphqlClient = session.graphqlClient else {
             errorMessage = "Not authenticated"
             return
@@ -129,37 +171,69 @@ public class SearchService {
         let issueSearches = enabledSearches.filter { $0.type != .repository }
         let repoSearches = enabledSearches.filter { $0.type == .repository }
 
+        var succeededCount = 0
+        var firstError: String?
+
         for search in issueSearches {
+            guard !Task.isCancelled else { break }
             do {
                 let results = try await graphqlClient.search(query: search.query, first: 30)
+                guard !Task.isCancelled, session.isAuthenticated else { break }
                 resultsBySearchId[search.id] = results
+                errorsBySearchId.removeValue(forKey: search.id)
+                succeededCount += 1
             } catch {
-                print("Error fetching search \(search.name): \(error)")
+                let description = error.localizedDescription
+                logger.error("Failed to fetch search \(search.name, privacy: .public): \(description, privacy: .public)")
+                errorsBySearchId[search.id] = description
+                if firstError == nil {
+                    firstError = description
+                }
             }
         }
 
         for search in repoSearches {
+            guard !Task.isCancelled else { break }
             do {
                 let results = try await graphqlClient.searchRepositories(query: search.query, first: 30)
+                guard !Task.isCancelled, session.isAuthenticated else { break }
                 repositoryResultsBySearchId[search.id] = results
+                errorsBySearchId.removeValue(forKey: search.id)
+                succeededCount += 1
             } catch {
-                print("Error fetching repo search \(search.name): \(error)")
+                let description = error.localizedDescription
+                logger.error("Failed to fetch repository search \(search.name, privacy: .public): \(description, privacy: .public)")
+                errorsBySearchId[search.id] = description
+                if firstError == nil {
+                    firstError = description
+                }
             }
+        }
+
+        guard !Task.isCancelled, session.isAuthenticated else {
+            isLoading = false
+            return
         }
 
         aggregateResults()
         aggregateRepositoryResults()
 
+        if enabledSearches.isEmpty || succeededCount > 0 {
+            lastSyncedAt = Date()
+        }
+
+        if let firstError, items.isEmpty, repositoryItems.isEmpty {
+            errorMessage = firstError
+        } else {
+            errorMessage = nil
+        }
+
         isLoading = false
     }
-
-    // MARK: - Auto-Refresh
 
     private func startAutoRefresh() {
         autoRefreshTask?.cancel()
         autoRefreshTask = Task { [weak self] in
-            await self?.fetchAll()
-
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(self?.refreshInterval ?? 300))
                 guard !Task.isCancelled else { break }
@@ -181,7 +255,7 @@ public class SearchService {
         do {
             return try await graphqlClient.search(query: query, first: 20)
         } catch {
-            print("Error fetching preview: \(error)")
+            logger.error("Failed to fetch search preview: \(error.localizedDescription, privacy: .public)")
             return []
         }
     }
@@ -194,12 +268,10 @@ public class SearchService {
         do {
             return try await graphqlClient.searchRepositories(query: query, first: 20)
         } catch {
-            print("Error fetching repository preview: \(error)")
+            logger.error("Failed to fetch repository preview: \(error.localizedDescription, privacy: .public)")
             return []
         }
     }
-
-    // MARK: - Private Helpers
 
     private func aggregateResults() {
         let enabledSearches = savedSearches.filter { $0.isEnabled && $0.type != .repository }
@@ -236,20 +308,20 @@ public class SearchService {
     }
 
     private func loadFromStorage() {
-        guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
+        guard let data = defaults.data(forKey: storageKey) else { return }
         do {
             savedSearches = try JSONDecoder().decode([SavedSearch].self, from: data)
         } catch {
-            print("Failed to load saved searches: \(error)")
+            logger.error("Failed to load saved searches: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     private func saveToStorage() {
         do {
             let data = try JSONEncoder().encode(savedSearches)
-            UserDefaults.standard.set(data, forKey: storageKey)
+            defaults.set(data, forKey: storageKey)
         } catch {
-            print("Failed to save searches: \(error)")
+            logger.error("Failed to save searches: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

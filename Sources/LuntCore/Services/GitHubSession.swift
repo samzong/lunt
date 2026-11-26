@@ -15,13 +15,10 @@ public final class GitHubSession {
 
     public init() {}
 
-    /// Configures the session with a GitHub access token.
-    ///
-    /// - Parameter token: The personal access token or OAuth token.
-    public func configure(token: String) {
+    public func configure(token: String, urlSession: URLSession? = nil) {
         self.token = token
-        self.graphqlClient = GitHubGraphQLClient(token: token)
-        self.restClient = GitHubAPI(token: token)
+        self.graphqlClient = GitHubGraphQLClient(token: token, session: urlSession)
+        self.restClient = GitHubAPI(token: token, session: urlSession)
     }
 
     /// Clears the active session and cancels references to API clients.

@@ -74,7 +74,6 @@ struct LuntApp: App {
                 await search.fetchAll()
 
                 engine.start()
-                await engine.syncAll()
             }
         }
     }
@@ -96,9 +95,6 @@ struct LuntApp: App {
         .onChange(of: session.isAuthenticated) { _, isAuthenticated in
             if isAuthenticated {
                 monitorEngine.start()
-                Task {
-                    await monitorEngine.syncAll()
-                }
             } else {
                 monitorEngine.stop()
                 monitorStore.clearEvents()

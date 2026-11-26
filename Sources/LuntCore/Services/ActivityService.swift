@@ -1,16 +1,14 @@
 import Foundation
+import os
 
-/// Filter category matching GitHub's tabs
 public enum ActivityFilter: String, CaseIterable, Sendable {
     case all
-    case created // author:@me
-    case assigned // assignee:@me
-    case mentioned // mentions:@me
-    case reviewRequested // review-requested:@me (PRs only)
+    case created
+    case assigned
+    case mentioned
+    case reviewRequested
 }
 
-/// Service for fetching user-related Issues and Pull Requests
-/// Aggregates results from author:@me, assignee:@me, mentions:@me queries
 @Observable
 @MainActor
 public class ActivityService {
@@ -41,7 +39,6 @@ public class ActivityService {
         reviewRequestedPRs.sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    // Underlying typed storage
     private var createdIssues: [SearchResultItem] = []
     private var createdPRs: [SearchResultItem] = []
 
@@ -55,14 +52,25 @@ public class ActivityService {
 
     public private(set) var isLoading = false
     public private(set) var errorMessage: String?
+    public private(set) var lastSyncedAt: Date?
 
     private let session: GitHubSession
+    private let logger = Logger(subsystem: "com.samzong.lunt", category: "ActivityService")
+    @ObservationIgnored private nonisolated(unsafe) var activeFetchTask: Task<Void, Never>?
+    private var activeFetchType: SearchResultItem.ItemType?
 
     public init(session: GitHubSession) {
         self.session = session
     }
 
+    deinit {
+        activeFetchTask?.cancel()
+    }
+
     public func clearToken() {
+        activeFetchTask?.cancel()
+        activeFetchTask = nil
+        activeFetchType = nil
         createdIssues = []
         createdPRs = []
         assignedIssues = []
@@ -71,10 +79,33 @@ public class ActivityService {
         mentionedPRs = []
         reviewRequestedPRs = []
         errorMessage = nil
+        lastSyncedAt = nil
+        isLoading = false
     }
 
-    /// Fetch user-related Items, optionally filtered by type
     public func fetchMyItems(type: SearchResultItem.ItemType? = nil) async {
+        while let activeTask = activeFetchTask {
+            let inFlightType = activeFetchType
+            await activeTask.value
+            if inFlightType == nil || inFlightType == type {
+                return
+            }
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.activeFetchTask = nil
+                self.activeFetchType = nil
+            }
+            await self.performFetchMyItems(type: type)
+        }
+        activeFetchType = type
+        activeFetchTask = task
+        await task.value
+    }
+
+    private func performFetchMyItems(type: SearchResultItem.ItemType?) async {
         guard let graphqlClient = session.graphqlClient else {
             errorMessage = "Not authenticated"
             return
@@ -84,14 +115,22 @@ public class ActivityService {
         errorMessage = nil
 
         do {
+            var nextCreatedIssues = createdIssues
+            var nextAssignedIssues = assignedIssues
+            var nextMentionedIssues = mentionedIssues
+            var nextCreatedPRs = createdPRs
+            var nextAssignedPRs = assignedPRs
+            var nextMentionedPRs = mentionedPRs
+            var nextReviewRequestedPRs = reviewRequestedPRs
+
             if type == nil || type == .issue {
                 async let created = graphqlClient.search(query: "is:open is:issue author:@me", first: 30)
                 async let assigned = graphqlClient.search(query: "is:open is:issue assignee:@me", first: 30)
                 async let mentioned = graphqlClient.search(query: "is:open is:issue mentions:@me", first: 30)
 
-                createdIssues = try await created
-                assignedIssues = try await assigned
-                mentionedIssues = try await mentioned
+                nextCreatedIssues = try await created
+                nextAssignedIssues = try await assigned
+                nextMentionedIssues = try await mentioned
             }
 
             if type == nil || type == .pullRequest {
@@ -100,15 +139,36 @@ public class ActivityService {
                 async let mentioned = graphqlClient.search(query: "is:open is:pr mentions:@me", first: 30)
                 async let reviewRequested = graphqlClient.search(query: "is:open is:pr review-requested:@me", first: 30)
 
-                createdPRs = try await created
-                assignedPRs = try await assigned
-                mentionedPRs = try await mentioned
-                reviewRequestedPRs = try await reviewRequested
+                nextCreatedPRs = try await created
+                nextAssignedPRs = try await assigned
+                nextMentionedPRs = try await mentioned
+                nextReviewRequestedPRs = try await reviewRequested
             }
 
+            guard !Task.isCancelled, session.isAuthenticated else {
+                isLoading = false
+                return
+            }
+
+            if type == nil || type == .issue {
+                createdIssues = nextCreatedIssues
+                assignedIssues = nextAssignedIssues
+                mentionedIssues = nextMentionedIssues
+            }
+
+            if type == nil || type == .pullRequest {
+                createdPRs = nextCreatedPRs
+                assignedPRs = nextAssignedPRs
+                mentionedPRs = nextMentionedPRs
+                reviewRequestedPRs = nextReviewRequestedPRs
+            }
+
+            lastSyncedAt = Date()
         } catch {
-            errorMessage = error.localizedDescription
-            print("Error fetching items: \(error)")
+            if !Task.isCancelled {
+                logger.error("Failed to fetch activity items: \(error.localizedDescription, privacy: .public)")
+                errorMessage = error.localizedDescription
+            }
         }
 
         isLoading = false

@@ -12,7 +12,27 @@ struct SearchListView: View {
     let onItemTapped: (SearchResultItem) -> Void
 
     var body: some View {
-        content
+        VStack(spacing: 0) {
+            if let activeErrorMessage,
+               !(searchService.isLoading && displayedItems.isEmpty && displayedRepositories.isEmpty) {
+                InlineErrorBanner(message: activeErrorMessage)
+            }
+            content
+        }
+    }
+
+    private var activeErrorMessage: String? {
+        if let selectedSearchId {
+            return searchService.errorsBySearchId[selectedSearchId]
+        }
+        let enabledErrors = searchService.savedSearches
+            .filter(\.isEnabled)
+            .compactMap { search -> String? in
+                guard let error = searchService.errorsBySearchId[search.id] else { return nil }
+                return "\(search.name): \(error)"
+            }
+        guard !enabledErrors.isEmpty else { return nil }
+        return enabledErrors.joined(separator: "\n")
     }
 
     // MARK: - Content
@@ -182,6 +202,33 @@ struct SearchListView: View {
             Spacer()
             ProgressView("search.list.loading".localized)
             Spacer()
+        }
+    }
+}
+
+struct InlineErrorBanner: View {
+    let message: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .padding(.top, 1)
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.12))
+        .overlay(alignment: .bottom) {
+            Divider()
         }
     }
 }
