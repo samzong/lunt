@@ -78,7 +78,7 @@
 "menubar.status.ready" = "Ready";
 "menubar.status.syncing" = "Syncing GitHub…";
 "menubar.status.synced" = "Synced %@";
-"menubar.status.not_signed_in" = "Not signed in";
+"menubar.status.not_signed_in" = "Not signed in · OAuth device flow";
 "menubar.status.opened" = "Opened %@";
 "menubar.status.inbox_cleared" = "Inbox marked read";
 "menubar.status.watch_cleared" = "Watch marked read";
@@ -125,9 +125,15 @@
 
 /* Rules Tab */
 "rules.title" = "Notification Rules";
+"rules.run_active" = "Run Active Rules";
+"rules.run_result.marked" = "%d notification marked as read";
+"rules.run_result.none" = "All matching notifications are already read";
+"rules.run_result.failed" = "Marked %d as read. %d failed.";
 "rules.add" = "Add Rule";
 "rules.import" = "Import Rules...";
 "rules.export" = "Export Rules...";
+"rules.import_failed" = "Import failed: %@";
+"rules.export_failed" = "Export failed: %@";
 "rules.empty.title" = "No Rules Yet";
 "rules.empty.subtitle" = "Create rules to automatically filter and manage your notifications";
 
@@ -147,6 +153,12 @@
 "welcome.subtitle" = "Stay on top of GitHub notifications, right from your menu bar";
 "welcome.setup.hint" = "Connect your GitHub account to get started";
 "welcome.open.settings" = "Connect";
+"welcome.oauth.title" = "Connect your GitHub account";
+"welcome.oauth.subtitle" = "Device OAuth stores credentials in macOS Keychain without personal tokens.";
+"welcome.oauth.authorize_title" = "Authorize Lunt on GitHub";
+"welcome.oauth.authorize_subtitle" = "Lunt copied the code to your clipboard. Confirm it in your browser to store the session in Keychain.";
+"welcome.oauth.code_copied" = "Code %@ copied to clipboard";
+"welcome.oauth.signed_in_as" = "Signed in as @%@";
 
 /* Account Tab - Auth Method */
 "account.auth.header" = "GitHub Account";

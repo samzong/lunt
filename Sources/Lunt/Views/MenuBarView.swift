@@ -3,11 +3,13 @@ import LuntCore
 import SwiftUI
 
 struct MenuBarView: View {
+    @Environment(GitHubSession.self) private var session
     @Environment(NotificationService.self) private var notificationService
     @Environment(ActivityService.self) private var activityService
     @Environment(SearchService.self) private var searchService
     @Environment(MonitorStore.self) private var monitorStore
     @Environment(MonitorEngine.self) private var monitorEngine
+    @Environment(DeviceFlowController.self) private var deviceFlowController
     @Environment(WorkspaceNavigationState.self) private var workspaceNavigationState
     @Environment(SettingsNavigationState.self) private var settingsNavigationState
     @Environment(\.openSettings) private var openSettings
@@ -102,22 +104,23 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if notificationService.isAuthenticated {
-                HeaderView(
-                    selectedTab: mainTabBinding,
-                    visibleTabs: visibleTabs,
-                    inboxUnread: notificationService.unreadCount,
-                    watchUnread: watchUnreadCount,
-                    quickFilterOpen: quickFilterOpen,
-                    isSyncing: isCurrentTabSyncing,
-                    currentUserLogin: notificationService.currentUser?.login,
-                    onToggleQuickFilter: toggleQuickFilter,
-                    onSync: { Task { await refreshCurrentTab() } },
-                    onOpenWorkspace: { openWorkspace(.monitors) },
-                    onOpenSettings: { openSettingsAndActivate() },
-                    onQuit: { NSApplication.shared.terminate(nil) }
-                )
+            HeaderView(
+                selectedTab: mainTabBinding,
+                visibleTabs: visibleTabs,
+                inboxUnread: notificationService.unreadCount,
+                watchUnread: watchUnreadCount,
+                quickFilterOpen: quickFilterOpen,
+                isSyncing: isCurrentTabSyncing,
+                isAuthenticated: notificationService.isAuthenticated,
+                currentUserLogin: notificationService.currentUser?.login,
+                onToggleQuickFilter: toggleQuickFilter,
+                onSync: { Task { await refreshCurrentTab() } },
+                onOpenWorkspace: { openWorkspace(.monitors) },
+                onOpenSettings: { openSettingsAndActivate() },
+                onQuit: { NSApplication.shared.terminate(nil) }
+            )
 
+            if notificationService.isAuthenticated {
                 ScopeBarView(
                     mainTab: effectiveMainTab,
                     inboxScope: rawBinding($inboxScopeRawValue, default: .all),
@@ -149,12 +152,13 @@ struct MenuBarView: View {
                 contentView
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
-                WelcomeView(onOpenSettings: { openSettingsAndActivate(tab: .account) })
+                WelcomeView(onOpenAccountSettings: { openSettingsAndActivate(tab: .account) })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             StatusStripView(
-                notice: popoverNotice,
-                isSyncing: isCurrentTabSyncing,
+                notice: popoverNotice ?? deviceFlowController.statusNotice,
+                isSyncing: notificationService.isAuthenticated && isCurrentTabSyncing,
                 lastSyncedAt: PopoverFeedProjection.lastSyncedAt(for: feedContext),
                 isAuthenticated: notificationService.isAuthenticated
             )
@@ -412,7 +416,10 @@ extension MenuBarView {
             isCommandHeld = event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command)
             return event
         }
-        guard event.type == .keyDown, !(popoverWindow.firstResponder is NSTextView) else { return event }
+        guard notificationService.isAuthenticated,
+              event.type == .keyDown,
+              !(popoverWindow.firstResponder is NSTextView)
+        else { return event }
 
         let rows = currentRows
         guard let action = PopoverKeyMonitor.action(

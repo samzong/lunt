@@ -5,11 +5,23 @@ public struct GitHubDeviceFlowService: Sendable {
     private static let accessTokenURL = URL(string: "https://github.com/login/oauth/access_token")!
     private static let oauthScopes = "notifications read:user"
 
-    public init() {}
+    private let urlSession: URLSession
+
+    public init(urlSession: URLSession? = nil) {
+        if let urlSession {
+            self.urlSession = urlSession
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            configuration.urlCache = nil
+            self.urlSession = URLSession(configuration: configuration)
+        }
+    }
 
     public func requestDeviceCode(clientId: String) async throws -> DeviceCodeResponse {
         var request = URLRequest(url: Self.deviceCodeURL)
         request.httpMethod = "POST"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode([
@@ -17,7 +29,7 @@ public struct GitHubDeviceFlowService: Sendable {
             "scope": Self.oauthScopes,
         ])
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw DeviceFlowError.unexpectedResponse("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
         }
@@ -25,9 +37,14 @@ public struct GitHubDeviceFlowService: Sendable {
         return try JSONDecoder().decode(DeviceCodeResponse.self, from: data)
     }
 
-    public func pollForToken(clientId: String, deviceCode: String) async throws -> PollTokenResult {
+    public func pollForToken(
+        clientId: String,
+        deviceCode: String,
+        currentInterval: Int = 5
+    ) async throws -> PollTokenResult {
         var request = URLRequest(url: Self.accessTokenURL)
         request.httpMethod = "POST"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode([
@@ -36,7 +53,7 @@ public struct GitHubDeviceFlowService: Sendable {
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
         ])
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw DeviceFlowError.unexpectedResponse("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
         }
@@ -48,8 +65,8 @@ public struct GitHubDeviceFlowService: Sendable {
             case "authorization_pending":
                 return .pending
             case "slow_down":
-                let extra = body["interval"] as? Int ?? 5
-                return .slowDown(newInterval: extra)
+                let serverInterval = body["interval"] as? Int
+                return .slowDown(newInterval: max(serverInterval ?? 0, currentInterval + 5))
             case "expired_token":
                 return .failed(.expiredToken)
             case "access_denied":

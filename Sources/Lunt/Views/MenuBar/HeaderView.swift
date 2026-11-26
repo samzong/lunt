@@ -11,6 +11,7 @@ struct HeaderView: View {
     let watchUnread: Int
     let quickFilterOpen: Bool
     let isSyncing: Bool
+    let isAuthenticated: Bool
     let currentUserLogin: String?
 
     let onToggleQuickFilter: () -> Void
@@ -22,12 +23,17 @@ struct HeaderView: View {
     var body: some View {
         HStack(spacing: 6) {
             tabPlatter
+                .disabled(!isAuthenticated)
+                .opacity(isAuthenticated ? 1 : 0.45)
 
             Spacer(minLength: 4)
 
             HStack(spacing: 2) {
                 quickFilterButton
+                    .disabled(!isAuthenticated)
+                    .opacity(isAuthenticated ? 1 : 0.45)
                 syncButton
+                    .opacity(isAuthenticated ? 1 : 0.45)
                 settingsMenu
             }
         }
@@ -124,7 +130,7 @@ struct HeaderView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .disabled(isSyncing)
+        .disabled(!isAuthenticated || isSyncing)
         .help("menubar.refresh".localized)
         .accessibilityLabel(Text("menubar.refresh".localized))
     }
@@ -141,6 +147,7 @@ struct HeaderView: View {
             } label: {
                 Label("workspace.title".localized, systemImage: "square.grid.2x2")
             }
+            .disabled(!isAuthenticated)
 
             Button {
                 onOpenSettings()

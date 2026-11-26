@@ -1,5 +1,5 @@
 # Lunt
-    
+
 <div align="center">
   <img src="Sources/Lunt/Resources/Assets.xcassets/AppIcon.appiconset/icon_256.png" alt="Lunt" width="128" />
   <br />
@@ -16,37 +16,29 @@
   </p>
 </div>
 
-## Screenshots
-
-<p align="center">
-  <img src="docs/images/notifications.png" width="45%" />
-  <img src="docs/images/activities.png" width="45%" />
-</p>
-
 ## Design Principles
 
-- Menubar is the single entry point and attention anchor
-- 30-second rule: core flows should finish within half a minute
-- Keep it lightweight: do triage here, deep work in GitHub
-- Use-and-go: quick actions in a transient window, not a permanent workspace
+Lunt keeps GitHub triage lightweight in your macOS menu bar:
+
+- Single entry point in the menu bar
+- Fast triage flows that finish in seconds and open deep work in GitHub
+- Calm transient views with keyboard shortcuts and a single workspace window
 
 ## Current Capabilities
 
-- Menubar-first workflow with configurable Notifications, Activities, and Search tabs
-- GitHub OAuth device flow sign-in
-- Unread GitHub notifications with issue/PR grouping, mark-as-read actions, and system notifications
-- Activities view powered by GitHub Search for open issues/PRs you created, are assigned to, are mentioned in, or were requested to review
-- Saved searches for issues, PRs, and repositories, with optional pinned searches in the menu bar
-- Notification rules for matching repository, organization, notification type, or reason, with mark-as-read and suppress-notification actions
-- Status cache and CI check summary in list items
-- Auto-updates via Sparkle
-- i18n support (EN / zh-Hans)
+Lunt includes these capabilities:
 
-## Next Up
-
-- Activity and search workflow refinements
-- More rule actions and notification controls
+- Menu bar popover with configurable Inbox, Work, and Watch sections
+- Inline GitHub OAuth device flow sign-in that stores sessions in macOS Keychain
+- Unread GitHub notifications in Inbox with issue and pull request grouping, read actions, and system notifications
+- Open issues and pull requests in Work organized by role and pinned queries
+- Watched repositories, watched accounts, and saved query alerts in Watch
+- Lunt Workspace window to manage watched targets and saved issue or pull request queries
+- Notification rules with automatic background evaluation and on-demand execution in Settings
+- Pull request status and CI check summary in unified list rows
+- Automatic updates through Sparkle
+- English and Simplified Chinese localization
 
 ## Requirements
 
-- macOS 15+ on Apple Silicon (`arm64`)
+- macOS 15 or later on Apple Silicon (`arm64`)

@@ -14,12 +14,14 @@ struct LuntApp: App {
     @State private var workspaceNavigationState = WorkspaceNavigationState()
     @State private var monitorStore: MonitorStore
     @State private var monitorEngine: MonitorEngine
+    @State private var deviceFlowController: DeviceFlowController
     @State private var startupTask: Task<Void, Never>?
     private let appConfiguration: AppConfiguration
     private let updaterController: SPUStandardUpdaterController
 
     init() {
-        appConfiguration = .load()
+        let configuration = AppConfiguration.load()
+        appConfiguration = configuration
 
         updaterController = SPUStandardUpdaterController(
             startingUpdater: true,
@@ -47,6 +49,21 @@ struct LuntApp: App {
 
         let engine = MonitorEngine(session: sessionInstance, store: store, notificationManager: NotificationManager.shared)
         _monitorEngine = State(initialValue: engine)
+
+        let flowServices = DeviceFlowServices(
+            session: sessionInstance,
+            notificationService: service,
+            activityService: itemsService,
+            searchService: search,
+            monitorStore: store,
+            monitorEngine: engine
+        )
+        _deviceFlowController = State(
+            initialValue: DeviceFlowController(
+                oauthClientID: configuration.githubOAuthClientID,
+                services: flowServices
+            )
+        )
 
         NotificationManager.shared.notificationService = service
         NotificationManager.shared.monitorStore = store
@@ -95,6 +112,7 @@ struct LuntApp: App {
                 .environment(searchService)
                 .environment(monitorStore)
                 .environment(monitorEngine)
+                .environment(deviceFlowController)
                 .environment(workspaceNavigationState)
                 .environment(settingsNavigationState)
         } label: {
@@ -115,15 +133,16 @@ struct LuntApp: App {
 
         Settings {
             SettingsView(
-                updater: updaterController.updater,
-                oauthClientID: appConfiguration.githubOAuthClientID
+                updater: updaterController.updater
             )
             .environment(session)
             .environment(notificationService)
             .environment(activityService)
             .environment(searchService)
             .environment(ruleStorage)
+            .environment(monitorStore)
             .environment(monitorEngine)
+            .environment(deviceFlowController)
             .environment(settingsNavigationState)
         }
 

@@ -5,8 +5,11 @@ struct RulesTab: View {
     let settingsWidth: CGFloat
 
     @Environment(RuleStorage.self) private var ruleStorage
+    @Environment(NotificationService.self) private var notificationService
     @State private var showingEditor = false
     @State private var editingRule: NotificationRule?
+    @State private var isRunningRules = false
+    @State private var runStatusMessage: String?
 
     var body: some View {
         Form {
@@ -35,6 +38,24 @@ struct RulesTab: View {
 
                     Spacer()
 
+                    Button {
+                        Task { await runActiveRules() }
+                    } label: {
+                        if isRunningRules {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("rules.run_active".localized)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(
+                        !notificationService.isAuthenticated ||
+                            !ruleStorage.rules.contains(where: \.isEnabled) ||
+                            isRunningRules
+                    )
+
                     Menu {
                         Button("rules.import".localized) {
                             importRules()
@@ -58,6 +79,12 @@ struct RulesTab: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                 }
+            } footer: {
+                if let runStatusMessage {
+                    Text(runStatusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)
@@ -68,6 +95,29 @@ struct RulesTab: View {
                 editingRule: editingRule,
                 onSave: { showingEditor = false }
             )
+        }
+    }
+
+    @MainActor
+    private func runActiveRules() async {
+        guard !isRunningRules else { return }
+        isRunningRules = true
+        defer { isRunningRules = false }
+
+        let summary = await notificationService.applyActiveRules()
+        if summary.failedCount > 0 {
+            runStatusMessage = String(
+                format: "rules.run_result.failed".localized,
+                summary.markedAsReadCount,
+                summary.failedCount
+            )
+        } else if summary.markedAsReadCount > 0 {
+            runStatusMessage = String(
+                format: "rules.run_result.marked".localized,
+                summary.markedAsReadCount
+            )
+        } else {
+            runStatusMessage = "rules.run_result.none".localized
         }
     }
 
@@ -82,11 +132,7 @@ struct RulesTab: View {
                 do {
                     let data = try Data(contentsOf: url)
                     let rules = try JSONDecoder().decode([NotificationRule].self, from: data)
-                    // Simple merge: append rules that have different IDs
-                    // Or for user experience, maybe just add all as "Copies"?
-                    // Let's rely on ID check.
                     for rule in rules {
-                        // If ID exists, update. If not, append.
                         if ruleStorage.rules.contains(where: { $0.id == rule.id }) {
                             ruleStorage.updateRule(rule)
                         } else {
@@ -94,8 +140,7 @@ struct RulesTab: View {
                         }
                     }
                 } catch {
-                    print("Failed to import rules: \(error)")
-                    // Ideally show an alert here
+                    runStatusMessage = String(format: "rules.import_failed".localized, error.localizedDescription)
                 }
             }
         }
@@ -112,7 +157,7 @@ struct RulesTab: View {
                     let data = try JSONEncoder().encode(ruleStorage.rules)
                     try data.write(to: url)
                 } catch {
-                    print("Failed to export rules: \(error)")
+                    runStatusMessage = String(format: "rules.export_failed".localized, error.localizedDescription)
                 }
             }
         }
